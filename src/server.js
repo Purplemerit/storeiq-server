@@ -6,11 +6,17 @@ const express = require("express");
 // Initialize express app
 const app = express();
 
+// Import all routes
+const routes = require("./routes");
+
 // Define a port
 const PORT = process.env.PORT || 5000;
 
 // Middleware to parse JSON
 app.use(express.json());
+
+// Mount all routes at /api
+app.use("/api", routes);
 
 // Basic route
 app.get("/", (req, res) => {
