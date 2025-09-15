@@ -2,16 +2,18 @@
   "name": "store-iq-server",
   "version": "1.0.0",
   "description": "Backend base setup with Node.js and Express",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.21.2"
+    "dotenv": "^17.2.2",
+    "express": "^4.21.2",
+    "mongoose": "^8.18.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
