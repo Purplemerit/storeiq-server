@@ -24,9 +24,17 @@ async function handleGenerateVideo(req, res) {
       return res.status(400).json({ error: 'Missing or invalid script' });
     }
     // Generate video (base64) from Gemini Veo-3
-    const videoBase64 = await generateVideo(script, videoConfig);
-    // Upload to Cloudinary
-    const videoUrl = await uploadVideoBase64(videoBase64);
+    const videoResult = await generateVideo(script, videoConfig);
+
+    // If Veo-3 is unavailable, return mock video URL and message
+    if (videoResult && videoResult.mock) {
+      return res.status(404).json({
+        error: videoResult.message || 'Veo-3 video generation is unavailable.',
+      });
+    }
+
+    // Otherwise, upload generated video to Cloudinary as before
+    const videoUrl = await uploadVideoBase64(videoResult);
     res.status(200).json({ videoUrl });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Internal server error' });

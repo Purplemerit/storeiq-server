@@ -63,6 +63,21 @@ async function generateVideo(script, videoConfig) {
     if (!videoBase64) throw new Error('No video returned from Veo-3');
     return videoBase64;
   } catch (err) {
+    // Log the error and status for diagnosis
+    console.error('Veo-3 API error:', err.response?.status, err.response?.data?.error?.message || err.message);
+
+    if (err.response?.status === 404) {
+      // Veo-3 endpoint not available for this API key
+      // Optionally, return a mock video URL for demo/testing
+      const mockVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4'; // public demo video
+      // Return a special object to indicate mock/demo mode
+      return {
+        mock: true,
+        message: 'Veo-3 video generation is not available for your API key. Returning a mock video for demo/testing.',
+        videoUrl: mockVideoUrl
+      };
+    }
+
     throw new Error('Veo-3 API error: ' + (err.response?.data?.error?.message || err.message));
   }
 }
