@@ -1,6 +1,6 @@
 // AI Controllers for script and video generation
 const { generateScript, generateVideo } = require('../geminiService');
-const { uploadVideoBase64 } = require('../cloudinaryService');
+const { uploadVideoBase64 } = require('../s3Service');
 
 // POST /api/generate-script
 async function handleGenerateScript(req, res) {
@@ -33,7 +33,7 @@ async function handleGenerateVideo(req, res) {
       });
     }
 
-    // Otherwise, upload generated video to Cloudinary as before
+    // Upload generated video to S3
     const videoUrl = await uploadVideoBase64(videoResult);
     res.status(200).json({ videoUrl });
   } catch (err) {
