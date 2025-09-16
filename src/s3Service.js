@@ -1,6 +1,6 @@
 // server/src/s3Service.js
 
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const crypto = require('crypto');
 
 const {
@@ -55,4 +55,22 @@ async function uploadVideoBase64(videoBase64) {
   }
 }
 
-module.exports = { uploadVideoBase64 };
+/**
+ * Deletes a video from S3 by key.
+ * @param {string} key - The S3 object key to delete.
+ * @returns {Promise<void>}
+ */
+async function deleteVideoFromS3(key) {
+  try {
+    const command = new DeleteObjectCommand({
+      Bucket: AWS_BUCKET_NAME,
+      Key: key,
+    });
+    await s3.send(command);
+  } catch (err) {
+    console.error('S3 delete error:', err);
+    throw new Error('Failed to delete video from S3');
+  }
+}
+
+module.exports = { uploadVideoBase64, deleteVideoFromS3 };
