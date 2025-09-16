@@ -29,20 +29,33 @@ const s3 = new S3Client({
  */
 async function uploadVideoBase64(videoBase64) {
   try {
-    // Remove data URL prefix if present
-    const base64 = videoBase64.replace(/^data:video\/mp4;base64,/, '');
+    // Extract mimetype if present in data URL, default to video/mp4
+    let mimetype = 'video/mp4';
+    let base64 = videoBase64;
+    const match = videoBase64.match(/^data:(video\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+    if (match) {
+      mimetype = match[1];
+      base64 = match[2];
+    } else {
+      // Remove mp4 prefix if present
+      base64 = videoBase64.replace(/^data:video\/mp4;base64,/, '');
+    }
     const buffer = Buffer.from(base64, 'base64');
 
     const timestamp = Date.now();
     const random = crypto.randomBytes(6).toString('hex');
-    const key = `video-${timestamp}-${random}.mp4`;
+    // Use extension from mimetype if possible, fallback to .mp4
+    let ext = 'mp4';
+    if (mimetype && mimetype.split('/')[1]) {
+      ext = mimetype.split('/')[1];
+    }
+    const key = `video-${timestamp}-${random}.${ext}`;
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,
       Key: key,
       Body: buffer,
-      ContentType: 'video/mp4',
-      ACL: 'public-read',
+      ContentType: mimetype,
     });
 
     await s3.send(command);
@@ -50,7 +63,39 @@ async function uploadVideoBase64(videoBase64) {
     const url = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
     return url;
   } catch (err) {
-    console.error('S3 upload error:', err);
+    throw new Error('Failed to upload video to S3');
+  }
+}
+
+/**
+ * Uploads a video buffer to S3 and returns the public URL and key.
+ * @param {Buffer} buffer - Video file buffer.
+ * @param {string} mimetype - MIME type of the video.
+ * @returns {Promise<{ url: string, key: string }>}
+ */
+async function uploadVideoBuffer(buffer, mimetype) {
+  try {
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(6).toString('hex');
+    // Use extension from mimetype if possible, fallback to .mp4
+    let ext = 'mp4';
+    if (mimetype && mimetype.split('/')[1]) {
+      ext = mimetype.split('/')[1];
+    }
+    const key = `video-${timestamp}-${random}.${ext}`;
+
+    const command = new PutObjectCommand({
+      Bucket: AWS_BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: mimetype || 'video/mp4',
+    });
+
+    await s3.send(command);
+
+    const url = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+    return { url, key };
+  } catch (err) {
     throw new Error('Failed to upload video to S3');
   }
 }
@@ -68,9 +113,8 @@ async function deleteVideoFromS3(key) {
     });
     await s3.send(command);
   } catch (err) {
-    console.error('S3 delete error:', err);
     throw new Error('Failed to delete video from S3');
   }
 }
 
-module.exports = { uploadVideoBase64, deleteVideoFromS3 };
+module.exports = { uploadVideoBase64, uploadVideoBuffer, deleteVideoFromS3 };
