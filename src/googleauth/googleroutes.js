@@ -18,7 +18,8 @@ router.get(
     );
 
     // redirect with token as query param
-    res.redirect(`http://localhost:${FRONTEND_URL}/dashboard?token=${token}`);
+    // Use full URL from FRONTEND_URL (e.g., http://localhost:8080)
+    res.redirect(`${FRONTEND_URL}/dashboard?token=${token}`);
   }
 );
 
