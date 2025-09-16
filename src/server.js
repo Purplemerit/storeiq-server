@@ -1,5 +1,7 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
+const session = require("express-session");
+const passport = require("../src/googleauth/googlestrategy");
 // Import express
 const express = require("express");
 
@@ -8,21 +10,38 @@ const app = express();
 
 // Import all routes
 const routes = require("./routes");
+const googleRoutes = require("../src/googleauth/googleroutes");
 
 // Define a port
 const PORT = process.env.PORT || 5000;
 
 // Middleware to parse JSON
 app.use(express.json());
+//session middleware
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "secret",
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Mount all routes at /api
 app.use("/api", routes);
-
+app.use("/auth", googleRoutes);
 // Basic route
 app.get("/", (req, res) => {
   res.send("Backend server is running 🚀");
 });
-
+app.get("/dashboard", (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.redirect("/auth/google");
+  }
+  res.send(`Hello, ${req.user.displayName}`);
+});
 // Connect to MongoDB and start server
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
