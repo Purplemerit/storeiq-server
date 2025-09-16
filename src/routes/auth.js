@@ -18,7 +18,7 @@ const User = mongoose.model("User", userSchema);
 const router = express.Router();
 
 // JWT secret
-const JWT_SECRET = process.env.JWT_SECRET || "a-very-strong-secret-key-change-this";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Helper: Validate email format
 function isValidEmail(email) {
