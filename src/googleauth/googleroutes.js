@@ -5,14 +5,8 @@ const jwt = require("jsonwebtoken");
 
 router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
+const FRONTEND_URL = process.env.FRONTEND_URL
 
-// router.get(
-//   "/google/callback",
-//   passport.authenticate("google", { failureRedirect: "/" }),
-//   (req, res) => {
-//     res.redirect("http://localhost:8080/dashboard"); 
-//   }
-// );
 router.get(
   "/google/callback",
   passport.authenticate("google", { failureRedirect: "/" }),
@@ -24,7 +18,7 @@ router.get(
     );
 
     // redirect with token as query param
-    res.redirect(`http://localhost:8080/dashboard?token=${token}`);
+    res.redirect(`http://localhost:${FRONTEND_URL}/dashboard?token=${token}`);
   }
 );
 
