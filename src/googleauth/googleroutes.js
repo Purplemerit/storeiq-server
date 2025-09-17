@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const passport = require("../googleauth/googlestrategy");
+const passport = require("passport");
+require("../googleauth/googlestrategy");
 const jwt = require("jsonwebtoken");
 
 router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));

@@ -1,14 +1,14 @@
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
-const GoogleUser = require("../models/GoogleUser");
+const AuthUser = require("../models/User"); // unified schema
 
 passport.serializeUser((user, done) => {
-  done(null, user.id); // store only MongoDB ID in session
+  done(null, user.id); // store only MongoDB _id
 });
 
 passport.deserializeUser(async (id, done) => {
   try {
-    const user = await GoogleUser.findById(id);
+    const user = await AuthUser.findById(id);
     done(null, user);
   } catch (err) {
     done(err, null);
@@ -24,18 +24,28 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        // Check if user exists
-        let user = await GoogleUser.findOne({ googleId: profile.id });
+        // First check if user exists by googleId
+        let user = await AuthUser.findOne({ googleId: profile.id });
 
         if (!user) {
-          // Create new Google user
-          user = new GoogleUser({
-            googleId: profile.id,
-            email: profile.emails[0].value,
-            name: profile.displayName,
-            avatar: profile.photos[0]?.value,
-          });
-          await user.save();
+          // Maybe they logged in with GitHub before → check by email
+          user = await AuthUser.findOne({ email: profile.emails[0].value });
+
+          if (user) {
+            // Link Google account to existing user
+            user.googleId = profile.id;
+            user.avatar = user.avatar || profile.photos[0]?.value;
+            await user.save();
+          } else {
+            // Create new user
+            user = new AuthUser({
+              googleId: profile.id,
+              username: profile.displayName,
+              email: profile.emails[0].value,
+              avatar: profile.photos[0]?.value,
+            });
+            await user.save();
+          }
         }
 
         return done(null, user);
