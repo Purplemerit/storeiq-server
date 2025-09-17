@@ -59,6 +59,8 @@ async function getUserVideos(req, res) {
     const videos = await listUserVideosFromS3(userId);
     // Ensure each object has required fields and thumbnail (null if not available)
     const formatted = videos.map(v => ({
+      id: v.key,
+      s3Key: v.key,
       title: v.title,
       s3Url: v.s3Url,
       url: v.s3Url, // For frontend compatibility
