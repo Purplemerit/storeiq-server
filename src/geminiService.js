@@ -1,8 +1,9 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 // Gemini and Veo-3 API integration service
 const axios = require('axios');
-
+const GEMINI_API_KEY_VEO = process.env.GEMINI_API_KEY_VEO;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
 if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set in environment');
 
 const VEO3_API_KEY = process.env.VEO3_API_KEY;
@@ -13,6 +14,7 @@ const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/${GEMIN
 const VEO3_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/veo-3:generateVideo';
 
 const GEMINI_LIST_MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
 /**
  * List available Gemini models for the API key.
  * Logs the available models and returns the list.

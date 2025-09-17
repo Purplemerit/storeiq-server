@@ -1,7 +1,11 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const session = require("express-session");
-const passport = require("../src/googleauth/googlestrategy");
+const passport = require("passport");
+require("./googleauth/googlestrategy");
+require("./githubauth/githubStrategy");
+require("./facebookauth/facebookStrategy");
+
 // Import express
 const express = require("express");
 
@@ -11,7 +15,8 @@ const app = express();
 // Import all routes
 const routes = require("./routes");
 const googleRoutes = require("../src/googleauth/googleroutes");
-
+const githubroutes = require("../src/githubauth/githubroutes");
+const facebookroutes = require("../src/facebookauth/facebookroutes");
 // Define a port
 const PORT = process.env.PORT || 5000;
 
@@ -34,6 +39,8 @@ app.use(express.json());
 // Mount all routes at /api
 app.use("/api", routes);
 app.use("/auth", googleRoutes);
+app.use("/auth", githubroutes);
+app.use("/auth", facebookroutes);
 // Basic route
 app.get("/", (req, res) => {
   res.send("Backend server is running 🚀");
