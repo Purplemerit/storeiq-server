@@ -6,6 +6,9 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set in environment');
 
+const VEO3_API_KEY = process.env.VEO3_API_KEY;
+if (!VEO3_API_KEY) throw new Error('VEO3_API_KEY not set in environment');
+
 const GEMINI_MODEL = 'models/gemini-2.5-flash';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/${GEMINI_MODEL}:generateContent`;
 const VEO3_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/veo-3:generateVideo';
@@ -16,17 +19,17 @@ const GEMINI_LIST_MODELS_URL = 'https://generativelanguage.googleapis.com/v1beta
  * List available Gemini models for the API key.
  * Logs the available models and returns the list.
  */
-async function listModels() {
+async function listModels(apiKey = GEMINI_API_KEY) {
   try {
     const response = await axios.get(
-      `${GEMINI_LIST_MODELS_URL}?key=${GEMINI_API_KEY}`
+      `${GEMINI_LIST_MODELS_URL}?key=${apiKey}`
     );
     const models = response.data.models || [];
-    console.log('Available Gemini models:', models.map(m => m.name));
+    console.log(`Available models for key ${apiKey === GEMINI_API_KEY ? 'GEMINI_API_KEY' : 'VEO3_API_KEY'}:`, models.map(m => m.name));
     return models;
   } catch (err) {
-    console.error('Error fetching Gemini models:', err.response?.data?.error?.message || err.message);
-    throw new Error('Failed to list Gemini models');
+    console.error('Error fetching models:', err.response?.data?.error?.message || err.message);
+    throw new Error('Failed to list models');
   }
 }
 
@@ -54,7 +57,7 @@ async function generateScript(prompt) {
 async function generateVideo(script, videoConfig) {
   try {
     const response = await axios.post(
-      `${VEO3_API_URL}?key=${GEMINI_API_KEY_VEO}`,
+      `${VEO3_API_URL}?key=${VEO3_API_KEY}`,
       {
         contents: [{ parts: [{ text: script }] }],
         ...(videoConfig ? { videoConfig } : {})
@@ -66,7 +69,12 @@ async function generateVideo(script, videoConfig) {
     return videoBase64;
   } catch (err) {
     // Log the error and status for diagnosis
-    console.error('Veo-3 API error:', err.response?.status, err.response?.data?.error?.message || err.message);
+    // Log the full Gemini error response for debugging
+    if (err.response) {
+      console.error('Veo-3 API error FULL RESPONSE:', JSON.stringify(err.response.data, null, 2));
+    } else {
+      console.error('Veo-3 API error (no response):', err.message);
+    }
 
     if (err.response?.status === 404) {
       // Veo-3 endpoint not available for this API key
@@ -87,5 +95,7 @@ async function generateVideo(script, videoConfig) {
 module.exports = { generateScript, generateVideo, listModels };
 // TEMP: Log available Gemini models at startup for debugging
 if (require.main === module) {
-  listModels().catch(err => console.error('ListModels error:', err.message));
+  // List models for both keys
+  listModels(GEMINI_API_KEY).catch(err => console.error('ListModels error (GEMINI_API_KEY):', err.message));
+  listModels(VEO3_API_KEY).catch(err => console.error('ListModels error (VEO3_API_KEY):', err.message));
 }

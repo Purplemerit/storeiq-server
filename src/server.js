@@ -21,7 +21,7 @@ const facebookroutes = require("../src/facebookauth/facebookroutes");
 const PORT = process.env.PORT || 5000;
 
 // Middleware to parse JSON
-app.use(express.json());
+// Removed global express.json() to avoid interfering with file uploads
 //session middleware
 app.use(
   session({
@@ -33,6 +33,8 @@ app.use(
 // Passport middleware
 app.use(passport.initialize());
 app.use(passport.session());
+// Enable JSON body parsing for all routes
+app.use(express.json());
 
 // Mount all routes at /api
 app.use("/api", routes);

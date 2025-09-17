@@ -57,8 +57,32 @@ router.post("/register", async (req, res) => {
       updatedAt: new Date(),
     });
     await user.save();
-    res.status(201).json({ message: "User registered successfully" });
+    const token = jwt.sign(
+      { id: user._id, username: user.username, email: user.email },
+      JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+    res.status(201).json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        username: user.username
+      }
+    });
   } catch (err) {
+    console.error(
+      "[REGISTER ERROR]",
+      {
+        message: err.message,
+        stack: err.stack,
+        request: {
+          username: req.body?.username,
+          email: req.body?.email,
+          // Do not log password for security
+        }
+      }
+    );
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -83,8 +107,26 @@ router.post("/login", async (req, res) => {
       JWT_SECRET,
       { expiresIn: "1h" }
     );
-    res.json({ token });
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        username: user.username
+      }
+    });
   } catch (err) {
+    console.error(
+      "[LOGIN ERROR]",
+      {
+        message: err.message,
+        stack: err.stack,
+        request: {
+          email: req.body?.email,
+          // Do not log password for security
+        }
+      }
+    );
     res.status(500).json({ error: "Server error" });
   }
 });
