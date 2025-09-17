@@ -28,6 +28,8 @@ app.use(
 // Passport middleware
 app.use(passport.initialize());
 app.use(passport.session());
+// Enable JSON body parsing for all routes
+app.use(express.json());
 
 // Mount all routes at /api
 app.use("/api", routes);

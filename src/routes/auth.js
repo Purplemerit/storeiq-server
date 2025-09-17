@@ -59,6 +59,18 @@ router.post("/register", async (req, res) => {
     await user.save();
     res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
+    console.error(
+      "[REGISTER ERROR]",
+      {
+        message: err.message,
+        stack: err.stack,
+        request: {
+          username: req.body?.username,
+          email: req.body?.email,
+          // Do not log password for security
+        }
+      }
+    );
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -85,6 +97,17 @@ router.post("/login", async (req, res) => {
     );
     res.json({ token });
   } catch (err) {
+    console.error(
+      "[LOGIN ERROR]",
+      {
+        message: err.message,
+        stack: err.stack,
+        request: {
+          email: req.body?.email,
+          // Do not log password for security
+        }
+      }
+    );
     res.status(500).json({ error: "Server error" });
   }
 });
