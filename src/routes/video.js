@@ -148,4 +148,28 @@ router.use('/upload-video', (err, req, res, next) => {
 const { getUserVideos } = require('../controllers/aiController');
 router.get('/videos', getUserVideos);
 
+/**
+ * POST /api/s3-presigned-url
+ * Body: { filename: string, contentType: string }
+ * Returns: { url, key }
+ */
+const { generatePresignedUrl } = require('../s3Service');
+router.post('/s3-presigned-url', authMiddleware, async (req, res) => {
+  const { filename, contentType } = req.body;
+  // Extract userId from authenticated user
+  const userId = req.user && req.user._id ? req.user._id.toString() : null;
+  if (!userId) {
+    return res.status(401).json({ error: 'User authentication required' });
+  }
+  if (!filename || !contentType) {
+    return res.status(400).json({ error: 'Missing filename or contentType' });
+  }
+  try {
+    const { url, fileUrl, key } = await generatePresignedUrl(filename, contentType, userId);
+    res.json({ url, fileUrl, s3Key: key });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to generate presigned URL' });
+  }
+});
+
 module.exports = router;

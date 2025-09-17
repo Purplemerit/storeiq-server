@@ -1,6 +1,8 @@
 // server/src/s3Service.js
 
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand: PresignPutObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 
 const {
@@ -178,4 +180,44 @@ async function listUserVideosFromS3(userId) {
   }
 }
 
-module.exports = { uploadVideoBase64, uploadVideoBuffer, deleteVideoFromS3, listUserVideosFromS3 };
+/**
+ * Generates a pre-signed S3 URL for uploading a video file.
+ * @param {string} filename - The original filename (for extension).
+ * @param {string} contentType - The MIME type of the file.
+ * @param {string} userId - The user's ID for key prefixing.
+ * @returns {Promise<{ url: string, key: string }>}
+ */
+const { GetObjectCommand } = require('@aws-sdk/client-s3');
+
+async function generatePresignedUrl(filename, contentType, userId) {
+  if (!userId) throw new Error('userId is required for presigned URL');
+  if (!filename) throw new Error('filename is required');
+  if (!contentType) throw new Error('contentType is required');
+  const timestamp = Date.now();
+  const random = crypto.randomBytes(6).toString('hex');
+  const ext = filename.split('.').pop() || 'mp4';
+  const key = `videos/${userId}/video-${timestamp}-${random}.${ext}`;
+  const putCommand = new PresignPutObjectCommand({
+    Bucket: AWS_BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+  });
+  const url = await getSignedUrl(s3, putCommand, { expiresIn: 900 }); // 15 min
+
+  // Generate presigned GET URL for the uploaded file (valid for 1 hour)
+  const getCommand = new GetObjectCommand({
+    Bucket: AWS_BUCKET_NAME,
+    Key: key,
+  });
+  const fileUrl = await getSignedUrl(s3, getCommand, { expiresIn: 3600 }); // 1 hour
+
+  return { url, fileUrl, key };
+}
+
+module.exports = {
+  uploadVideoBase64,
+  uploadVideoBuffer,
+  deleteVideoFromS3,
+  listUserVideosFromS3,
+  generatePresignedUrl,
+};
