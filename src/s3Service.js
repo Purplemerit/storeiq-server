@@ -5,6 +5,14 @@ const { PutObjectCommand: PresignPutObjectCommand } = require('@aws-sdk/client-s
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 
+// Multipart upload imports
+const {
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+} = require('@aws-sdk/client-s3');
+
 const {
   AWS_ACCESS_KEY_ID,
   AWS_SECRET_ACCESS_KEY,
@@ -214,10 +222,100 @@ async function generatePresignedUrl(filename, contentType, userId) {
   return { url, fileUrl, key };
 }
 
+/**
+ * Initiates a multipart upload and returns { uploadId, key }
+ * @param {string} filename
+ * @param {string} contentType
+ * @param {string} userId
+ */
+async function initiateMultipartUpload(filename, contentType, userId) {
+  if (!userId) throw new Error('userId is required');
+  if (!filename) throw new Error('filename is required');
+  if (!contentType) throw new Error('contentType is required');
+  const timestamp = Date.now();
+  const random = crypto.randomBytes(6).toString('hex');
+  const ext = filename.split('.').pop() || 'mp4';
+  const key = `videos/${userId}/video-${timestamp}-${random}.${ext}`;
+  const command = new CreateMultipartUploadCommand({
+    Bucket: AWS_BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+  });
+  const result = await s3.send(command);
+  return { uploadId: result.UploadId, key };
+}
+
+/**
+ * Generates presigned URLs for uploading parts.
+ * @param {string} key
+ * @param {string} uploadId
+ * @param {number[]} partNumbers
+ * @param {string} contentType
+ * @returns {Promise<Array<{ partNumber: number, url: string }>>}
+ */
+async function generateMultipartPresignedUrls(key, uploadId, partNumbers, contentType) {
+  if (!key || !uploadId || !Array.isArray(partNumbers)) throw new Error('Missing required params');
+  const urls = await Promise.all(
+    partNumbers.map(async (partNumber) => {
+      const command = new UploadPartCommand({
+        Bucket: AWS_BUCKET_NAME,
+        Key: key,
+        PartNumber: partNumber,
+        UploadId: uploadId,
+        ContentType: contentType,
+      });
+      const url = await getSignedUrl(s3, command, { expiresIn: 900 });
+      return { partNumber, url };
+    })
+  );
+  return urls;
+}
+
+/**
+ * Completes a multipart upload.
+ * @param {string} key
+ * @param {string} uploadId
+ * @param {Array<{ ETag: string, PartNumber: number }>} parts
+ * @returns {Promise<{ fileUrl: string }>}
+ */
+async function completeMultipartUpload(key, uploadId, parts) {
+  if (!key || !uploadId || !Array.isArray(parts)) throw new Error('Missing required params');
+  // Parts must be sorted by PartNumber
+  const sortedParts = parts.slice().sort((a, b) => a.PartNumber - b.PartNumber);
+  const command = new CompleteMultipartUploadCommand({
+    Bucket: AWS_BUCKET_NAME,
+    Key: key,
+    UploadId: uploadId,
+    MultipartUpload: { Parts: sortedParts },
+  });
+  await s3.send(command);
+  const fileUrl = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+  return { fileUrl };
+}
+
+/**
+ * Aborts a multipart upload.
+ * @param {string} key
+ * @param {string} uploadId
+ */
+async function abortMultipartUpload(key, uploadId) {
+  if (!key || !uploadId) throw new Error('Missing required params');
+  const command = new AbortMultipartUploadCommand({
+    Bucket: AWS_BUCKET_NAME,
+    Key: key,
+    UploadId: uploadId,
+  });
+  await s3.send(command);
+}
+
 module.exports = {
   uploadVideoBase64,
   uploadVideoBuffer,
   deleteVideoFromS3,
   listUserVideosFromS3,
   generatePresignedUrl,
+  initiateMultipartUpload,
+  generateMultipartPresignedUrls,
+  completeMultipartUpload,
+  abortMultipartUpload,
 };

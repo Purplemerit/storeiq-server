@@ -172,4 +172,86 @@ router.post('/s3-presigned-url', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * S3 Multipart Upload Endpoints
+ */
+const {
+  initiateMultipartUpload,
+  generateMultipartPresignedUrls,
+  completeMultipartUpload,
+  abortMultipartUpload,
+} = require('../s3Service');
+
+/**
+ * POST /api/s3-multipart/initiate
+ * Body: { filename, contentType }
+ * Returns: { uploadId, key }
+ */
+router.post('/s3-multipart/initiate', authMiddleware, async (req, res) => {
+  const { filename, contentType } = req.body;
+  const userId = req.user && req.user._id ? req.user._id.toString() : null;
+  if (!userId) return res.status(401).json({ error: 'User authentication required' });
+  if (!filename || !contentType) return res.status(400).json({ error: 'Missing filename or contentType' });
+  try {
+    const { uploadId, key } = await initiateMultipartUpload(filename, contentType, userId);
+    res.json({ uploadId, key });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to initiate multipart upload' });
+  }
+});
+
+/**
+ * POST /api/s3-multipart/presigned-urls
+ * Body: { key, uploadId, partNumbers: [int], contentType }
+ * Returns: { urls: [{ partNumber, url }] }
+ */
+router.post('/s3-multipart/presigned-urls', authMiddleware, async (req, res) => {
+  const { key, uploadId, partNumbers, contentType } = req.body;
+  if (!key || !uploadId || !Array.isArray(partNumbers) || !contentType) {
+    return res.status(400).json({ error: 'Missing key, uploadId, partNumbers, or contentType' });
+  }
+  try {
+    const urls = await generateMultipartPresignedUrls(key, uploadId, partNumbers, contentType);
+    res.json({ urls });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to generate presigned URLs' });
+  }
+});
+
+/**
+ * POST /api/s3-multipart/complete
+ * Body: { key, uploadId, parts: [{ ETag, PartNumber }] }
+ * Returns: { fileUrl }
+ */
+router.post('/s3-multipart/complete', authMiddleware, async (req, res) => {
+  const { key, uploadId, parts } = req.body;
+  if (!key || !uploadId || !Array.isArray(parts)) {
+    return res.status(400).json({ error: 'Missing key, uploadId, or parts' });
+  }
+  try {
+    const { fileUrl } = await completeMultipartUpload(key, uploadId, parts);
+    res.json({ fileUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to complete multipart upload' });
+  }
+});
+
+/**
+ * POST /api/s3-multipart/abort
+ * Body: { key, uploadId }
+ * Returns: { success: true }
+ */
+router.post('/s3-multipart/abort', authMiddleware, async (req, res) => {
+  const { key, uploadId } = req.body;
+  if (!key || !uploadId) {
+    return res.status(400).json({ error: 'Missing key or uploadId' });
+  }
+  try {
+    await abortMultipartUpload(key, uploadId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to abort multipart upload' });
+  }
+});
+
 module.exports = router;
