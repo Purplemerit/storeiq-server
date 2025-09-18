@@ -66,6 +66,7 @@ async function getUserVideos(req, res) {
       url: v.s3Url, // For frontend compatibility
       createdAt: v.createdAt,
       thumbnail: v.thumbnail || null, // Add logic here if thumbnails are stored with a convention
+      isEdited: v.isEdited || false,
     }));
     res.json(formatted);
   } catch (err) {

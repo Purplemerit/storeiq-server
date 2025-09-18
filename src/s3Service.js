@@ -103,7 +103,7 @@ async function uploadVideoBase64(videoBase64, userId) {
  * @param {string} userId - MongoDB ObjectId of the authenticated user.
  * @returns {Promise<{ url: string, key: string }>}
  */
-async function uploadVideoBuffer(buffer, mimetype, userId) {
+async function uploadVideoBuffer(buffer, mimetype, userId, metadata = {}) {
   if (!userId) {
     throw new Error('userId is required for video upload');
   }
@@ -116,17 +116,20 @@ async function uploadVideoBuffer(buffer, mimetype, userId) {
       ext = mimetype.split('/')[1];
     }
     const key = `videos/${userId}/video-${timestamp}-${random}.${ext}`;
+    console.log('[S3][UPLOAD] userId:', userId, 'key:', key);
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,
       Key: key,
       Body: buffer,
       ContentType: mimetype || 'video/mp4',
+      Metadata: metadata,
     });
 
     await s3.send(command);
 
     const url = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+    console.log('[S3][UPLOAD] Uploaded to:', url);
     return { url, key };
   } catch (err) {
     throw new Error('Failed to upload video to S3');
@@ -157,6 +160,8 @@ const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
  * @param {string} userId
  * @returns {Promise<Array>} Array of video metadata objects
  */
+const { HeadObjectCommand } = require('@aws-sdk/client-s3');
+
 async function listUserVideosFromS3(userId) {
   if (!userId) throw new Error('userId is required');
   // Assuming videos are stored with a prefix per user, e.g. "videos/{userId}/"
@@ -172,14 +177,33 @@ async function listUserVideosFromS3(userId) {
       console.log('[S3] No videos found for user:', userId);
       return [];
     }
-    const mapped = data.Contents.map(obj => ({
-      key: obj.Key,
-      s3Url: `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${obj.Key}`,
-      title: obj.Key.split('/').pop(),
-      createdAt: obj.LastModified,
-      size: obj.Size,
-      // Thumbnail logic can be added if thumbnails are stored with a convention
-    }));
+    // Fetch metadata for each video (parallel)
+    const mapped = await Promise.all(
+      data.Contents.map(async (obj) => {
+        let isEdited = false;
+        try {
+          const head = await s3.send(new HeadObjectCommand({
+            Bucket: AWS_BUCKET_NAME,
+            Key: obj.Key,
+          }));
+          console.log('[S3][DEBUG] Metadata for', obj.Key, head.Metadata);
+          if (head.Metadata && head.Metadata.edited === "true") {
+            isEdited = true;
+          }
+        } catch (e) {
+          console.error('[S3][DEBUG] Failed to fetch metadata for', obj.Key, e);
+        }
+        return {
+          key: obj.Key,
+          s3Url: `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${obj.Key}`,
+          title: obj.Key.split('/').pop(),
+          createdAt: obj.LastModified,
+          size: obj.Size,
+          isEdited,
+          // Thumbnail logic can be added if thumbnails are stored with a convention
+        };
+      })
+    );
     console.log('[S3] Mapped video objects:', JSON.stringify(mapped, null, 2));
     return mapped;
   } catch (err) {
