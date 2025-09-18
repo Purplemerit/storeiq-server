@@ -263,10 +263,15 @@ router.post('/s3-multipart/abort', authMiddleware, async (req, res) => {
  * Body: { videoUrl (or s3Key), start, end }
  * Returns: { jobId, status }
  */
-router.post('/video/crop', async (req, res) => {
+router.post('/video/crop', authMiddleware, async (req, res) => {
   const { videoUrl, s3Key, start, end } = req.body;
+  // Extract userId from authenticated user
+  const userId = req.user && req.user._id ? req.user._id.toString() : null;
   if ((!videoUrl && !s3Key) || typeof start !== 'number' || typeof end !== 'number') {
     return res.status(400).json({ error: 'Missing or invalid videoUrl/s3Key, start, or end' });
+  }
+  if (!userId) {
+    return res.status(401).json({ error: 'User authentication required' });
   }
   try {
     const job = createJob({
@@ -274,7 +279,8 @@ router.post('/video/crop', async (req, res) => {
       videoUrl,
       s3Key,
       start,
-      end
+      end,
+      userId
     });
     console.log(`[VIDEO-CROP][API] Created crop job:`, {
       jobId: job.jobId,
@@ -282,6 +288,7 @@ router.post('/video/crop', async (req, res) => {
       s3Key: job.s3Key,
       start: job.start,
       end: job.end,
+      userId: job.userId,
       status: job.status
     });
     res.json({ jobId: job.jobId, status: job.status });

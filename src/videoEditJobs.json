@@ -238,5 +238,18 @@
     "downloadUrl": "https://store-iq-bucket.s3.ap-south-1.amazonaws.com/videos/video-crop-demo/video-1758180633482-61288b7c1a66.mp4",
     "createdAt": "2025-09-18T07:30:28.095Z",
     "updatedAt": "2025-09-18T07:30:35.018Z"
+  },
+  "l1re7u6os2": {
+    "jobId": "l1re7u6os2",
+    "type": "crop",
+    "videoUrl": "https://store-iq-bucket.s3.ap-south-1.amazonaws.com/videos/68c8fc04818c35043f9f7344/video-1758115354815-fdf7a0aad1b5.mp4",
+    "start": 1.5,
+    "end": 4.348233,
+    "userId": "68c8fc04818c35043f9f7344",
+    "status": "completed",
+    "error": null,
+    "downloadUrl": "https://store-iq-bucket.s3.ap-south-1.amazonaws.com/videos/video-crop-demo/video-1758181454346-2b54ee2b997c.mp4",
+    "createdAt": "2025-09-18T07:44:08.936Z",
+    "updatedAt": "2025-09-18T07:44:15.376Z"
   }
 }

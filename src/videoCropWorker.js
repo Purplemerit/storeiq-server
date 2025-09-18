@@ -70,8 +70,8 @@ async function processCropJob(job) {
 
     // Upload cropped video to S3
     const buffer = fs.readFileSync(outputPath);
-    // For demo, userId is not used; in real use, pass userId
-    const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', 'video-crop-demo');
+    // Store cropped video in user-specific S3 folder/key
+    const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId);
     updateJob(job.jobId, { status: 'completed', downloadUrl: url, error: null });
     console.log(`[VIDEO-CROP][WORKER] Completed crop job:`, {
       jobId: job.jobId,
