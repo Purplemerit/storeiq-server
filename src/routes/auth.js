@@ -43,7 +43,12 @@ router.post("/register", async (req, res) => {
     await user.save();
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
-
+    res.cookie("token", token, {
+  httpOnly: true,                     // JS can't access it
+  secure: process.env.NODE_ENV === "production", // HTTPS only in prod
+  sameSite: "strict",                  // CSRF protection
+  maxAge: 24 * 60 * 60 * 1000,         // 1 day
+});
     res.status(201).json({
       token,
       user: { id: user._id, email: user.email, username: user.username },
@@ -74,7 +79,12 @@ router.post("/login", async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
-
+    res.cookie("token", token, {
+  httpOnly: true,                     // JS can't access it
+  secure: process.env.NODE_ENV === "production", // HTTPS only in prod
+  sameSite: "strict",                  // CSRF protection
+  maxAge: 24 * 60 * 60 * 1000,         // 1 day
+});
     res.json({
       token,
       user: { id: user._id, email: user.email, username: user.username },
