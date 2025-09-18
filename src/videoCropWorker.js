@@ -39,12 +39,17 @@ function cropWithFfmpeg(inputPath, outputPath, start, end) {
 
 async function processCropJob(job) {
   let inputPath, cleanupInput = false;
+  if (!job.userId) {
+    updateJob(job.jobId, { status: 'failed', error: 'userId is required for export' });
+    throw new Error('userId is required for export and must be present in crop job');
+  }
   console.log(`[VIDEO-CROP][WORKER] Processing crop job:`, {
     jobId: job.jobId,
     videoUrl: job.videoUrl,
     s3Key: job.s3Key,
     start: job.start,
-    end: job.end
+    end: job.end,
+    userId: job.userId
   });
   try {
     // Download video if videoUrl is provided
