@@ -2,22 +2,10 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-// Mongoose User model
-const mongoose = require("mongoose");
-
-const userSchema = new mongoose.Schema({
-  username: { type: String, required: true },
-  email:    { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  createdAt:{ type: Date, default: Date.now },
-  updatedAt:{ type: Date, default: Date.now }
-});
-
-const User = mongoose.model("User", userSchema);
+const User = require("../models/User");
+const authMiddleware = require("./authMiddleware");
 
 const router = express.Router();
-
-// JWT secret
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // Helper: Validate email format
@@ -30,25 +18,21 @@ function isValidPassword(password) {
   return typeof password === "string" && password.length >= 8;
 }
 
-const authMiddleware = require('./authMiddleware');
-
 // Register route
 router.post("/register", async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    if (
-      typeof username !== "string" ||
-      !isValidEmail(email) ||
-      !isValidPassword(password)
-    ) {
+
+    if (typeof username !== "string" || !isValidEmail(email) || !isValidPassword(password)) {
       return res.status(400).json({ error: "Invalid input" });
     }
-    // Check if user exists
+
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(409).json({ error: "Email already registered" });
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const hashedPassword = await bcrypt.hash(password, 12);
     const user = new User({
       username,
       email,
@@ -57,32 +41,15 @@ router.post("/register", async (req, res) => {
       updatedAt: new Date(),
     });
     await user.save();
-    const token = jwt.sign(
-      { id: user._id, username: user.username, email: user.email },
-      JWT_SECRET,
-      { expiresIn: "1h" }
-    );
+
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
+
     res.status(201).json({
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        username: user.username
-      }
+      user: { id: user._id, email: user.email, username: user.username },
     });
   } catch (err) {
-    console.error(
-      "[REGISTER ERROR]",
-      {
-        message: err.message,
-        stack: err.stack,
-        request: {
-          username: req.body?.username,
-          email: req.body?.email,
-          // Do not log password for security
-        }
-      }
-    );
+    console.error("[REGISTER ERROR]", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -91,42 +58,29 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!isValidEmail(email) || !isValidPassword(password)) {
-      return res.status(400).json({ error: "Invalid input" });
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: "Invalid email" });
     }
+
     const user = await User.findOne({ email });
-    if (!user) {
+    if (!user || !user.password) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
+
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-    const token = jwt.sign(
-      { id: user._id, username: user.username, email: user.email },
-      JWT_SECRET,
-      { expiresIn: "1h" }
-    );
+
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
+
     res.json({
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        username: user.username
-      }
+      user: { id: user._id, email: user.email, username: user.username },
     });
   } catch (err) {
-    console.error(
-      "[LOGIN ERROR]",
-      {
-        message: err.message,
-        stack: err.stack,
-        request: {
-          email: req.body?.email,
-          // Do not log password for security
-        }
-      }
-    );
+    console.error("[LOGIN ERROR]", err);
     res.status(500).json({ error: "Server error" });
   }
 });
