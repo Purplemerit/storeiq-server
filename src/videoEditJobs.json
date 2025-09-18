@@ -1,0 +1,38 @@
+{
+  "keqwunw005": {
+    "jobId": "keqwunw005",
+    "type": "crop",
+    "videoUrl": "https://store-iq-bucket.s3.ap-south-1.amazonaws.com/videos/68c8fc04818c35043f9f7344/video-1758115354815-fdf7a0aad1b5.mp4",
+    "start": 2,
+    "end": 4.348233,
+    "status": "pending",
+    "error": null,
+    "downloadUrl": null,
+    "createdAt": "2025-09-18T06:05:57.504Z",
+    "updatedAt": "2025-09-18T06:05:57.504Z"
+  },
+  "g90bya1kr5": {
+    "jobId": "g90bya1kr5",
+    "type": "crop",
+    "videoUrl": "https://store-iq-bucket.s3.ap-south-1.amazonaws.com/videos/68c8fc04818c35043f9f7344/video-1758115354815-fdf7a0aad1b5.mp4",
+    "start": 1,
+    "end": 4.348233,
+    "status": "pending",
+    "error": null,
+    "downloadUrl": null,
+    "createdAt": "2025-09-18T06:08:27.919Z",
+    "updatedAt": "2025-09-18T06:08:27.919Z"
+  },
+  "69ywqi4zwv": {
+    "jobId": "69ywqi4zwv",
+    "type": "crop",
+    "videoUrl": "https://store-iq-bucket.s3.ap-south-1.amazonaws.com/videos/68c8fc04818c35043f9f7344/video-1758115354815-fdf7a0aad1b5.mp4",
+    "start": 2,
+    "end": 4.348233,
+    "status": "pending",
+    "error": null,
+    "downloadUrl": null,
+    "createdAt": "2025-09-18T06:08:45.474Z",
+    "updatedAt": "2025-09-18T06:08:45.474Z"
+  }
+}

@@ -3,6 +3,10 @@ const { deleteVideoFromS3 } = require('../s3Service');
 
 const router = express.Router();
 const authMiddleware = require('./authMiddleware');
+const {
+  createJob,
+  getJob
+} = require('../videoEditJob');
 
 /**
  * DELETE /api/delete-video
@@ -252,6 +256,57 @@ router.post('/s3-multipart/abort', authMiddleware, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to abort multipart upload' });
   }
+});
+
+/**
+ * POST /api/video/crop
+ * Body: { videoUrl (or s3Key), start, end }
+ * Returns: { jobId, status }
+ */
+router.post('/video/crop', async (req, res) => {
+  const { videoUrl, s3Key, start, end } = req.body;
+  if ((!videoUrl && !s3Key) || typeof start !== 'number' || typeof end !== 'number') {
+    return res.status(400).json({ error: 'Missing or invalid videoUrl/s3Key, start, or end' });
+  }
+  try {
+    const job = createJob({
+      type: 'crop',
+      videoUrl,
+      s3Key,
+      start,
+      end
+    });
+    console.log(`[VIDEO-CROP][API] Created crop job:`, {
+      jobId: job.jobId,
+      videoUrl: job.videoUrl,
+      s3Key: job.s3Key,
+      start: job.start,
+      end: job.end,
+      status: job.status
+    });
+    res.json({ jobId: job.jobId, status: job.status });
+  } catch (err) {
+    console.error('[VIDEO-CROP][API] Failed to create crop job:', err);
+    res.status(500).json({ error: err.message || 'Failed to create crop job' });
+  }
+});
+
+/**
+ * GET /api/video/crop/:job_id
+ * Returns: { jobId, status, error, downloadUrl }
+ */
+router.get('/video/crop/:job_id', async (req, res) => {
+  const { job_id } = req.params;
+  const job = getJob(job_id);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  res.json({
+    jobId: job.jobId,
+    status: job.status,
+    error: job.error,
+    downloadUrl: job.downloadUrl
+  });
 });
 
 module.exports = router;
