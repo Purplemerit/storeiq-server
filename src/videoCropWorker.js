@@ -1,4 +1,5 @@
 // Video crop worker: polls for pending crop jobs, processes them with ffmpeg, uploads to S3, updates job status
+require('dotenv').config({ path: __dirname + '/../.env' });
 
 const { getPendingJobs, updateJob } = require('./videoEditJob');
 const { uploadVideoBuffer } = require('./s3Service');
@@ -22,12 +23,11 @@ async function downloadToFile(url, dest) {
 
 function cropWithFfmpeg(inputPath, outputPath, start, end) {
   return new Promise((resolve, reject) => {
-    const duration = end - start;
     execFile('ffmpeg', [
       '-y',
-      '-i', inputPath,
       '-ss', String(start),
-      '-t', String(duration),
+      '-i', inputPath,
+      '-to', String(end),
       '-c', 'copy',
       outputPath
     ], (err, stdout, stderr) => {
@@ -52,6 +52,13 @@ async function processCropJob(job) {
       inputPath = path.join(TMP_DIR, `input_${job.jobId}.mp4`);
       await downloadToFile(job.videoUrl, inputPath);
       cleanupInput = true;
+      // Check if input file exists after download
+      if (!fs.existsSync(inputPath)) {
+        const errMsg = `[VIDEO-CROP][WORKER] Input file missing after download: ${inputPath}`;
+        console.error(errMsg);
+        updateJob(job.jobId, { status: 'failed', error: 'Input file missing after download' });
+        return;
+      }
     } else if (job.s3Key) {
       // TODO: Download from S3 if needed
       throw new Error('s3Key input not implemented in demo');

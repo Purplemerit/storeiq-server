@@ -1,4 +1,5 @@
 // server/src/s3Service.js
+require('dotenv').config({ path: __dirname + '/../.env' });
 
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { PutObjectCommand: PresignPutObjectCommand } = require('@aws-sdk/client-s3');
@@ -160,7 +161,6 @@ async function listUserVideosFromS3(userId) {
   if (!userId) throw new Error('userId is required');
   // Assuming videos are stored with a prefix per user, e.g. "videos/{userId}/"
   const prefix = `videos/${userId}/`;
-  console.log('[S3] Listing videos with prefix:', prefix);
   const command = new ListObjectsV2Command({
     Bucket: AWS_BUCKET_NAME,
     Prefix: prefix,
