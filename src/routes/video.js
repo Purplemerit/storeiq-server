@@ -267,6 +267,10 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
   const { videoUrl, s3Key, start, end } = req.body;
   // Extract userId from authenticated user
   const userId = req.user && req.user._id ? req.user._id.toString() : null;
+  console.log('[VIDEO-CROP][API] Incoming crop request:', {
+    videoUrl, s3Key, start, end, userId,
+    reqUser: req.user
+  });
   if ((!videoUrl && !s3Key) || typeof start !== 'number' || typeof end !== 'number') {
     return res.status(400).json({ error: 'Missing or invalid videoUrl/s3Key, start, or end' });
   }

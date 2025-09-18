@@ -76,7 +76,9 @@ async function processCropJob(job) {
     // Upload cropped video to S3
     const buffer = fs.readFileSync(outputPath);
     // Store cropped video in user-specific S3 folder/key
+    console.log(`[VIDEO-CROP][WORKER][UPLOAD] About to upload. userId:`, job.userId, 'typeof:', typeof job.userId);
     const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId);
+    console.log(`[VIDEO-CROP][WORKER][UPLOAD] S3 upload result:`, { url, key });
     updateJob(job.jobId, { status: 'completed', downloadUrl: url, error: null });
     console.log(`[VIDEO-CROP][WORKER] Completed crop job:`, {
       jobId: job.jobId,
@@ -98,6 +100,17 @@ async function pollAndProcess() {
   const jobs = getPendingJobs('crop');
   if (jobs.length > 0) {
     console.log(`[VIDEO-CROP][WORKER] Found ${jobs.length} pending crop job(s)`);
+    jobs.forEach(j => {
+      console.log(`[VIDEO-CROP][WORKER][QUEUE] Pending job:`, {
+        jobId: j.jobId,
+        userId: j.userId,
+        videoUrl: j.videoUrl,
+        s3Key: j.s3Key,
+        start: j.start,
+        end: j.end,
+        status: j.status
+      });
+    });
   }
   for (const job of jobs) {
     updateJob(job.jobId, { status: 'processing' });
