@@ -6,7 +6,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 function authMiddleware(req, res, next) {
   // Log for debugging
-  console.log(`[authMiddleware] Cookies:`, req.cookies);
+  // console.log(`[authMiddleware] Cookies:`, req.cookies);
 
   let token;
 

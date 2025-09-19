@@ -102,15 +102,43 @@ router.post("/login", async (req, res) => {
 // Protected route
 router.get("/me", authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("id _id email username");
+    const user = await User.findById(req.user._id).select("id _id email username timezone");
     if (!user) return res.status(404).json({ error: "User not found" });
     // Only expose safe fields
     const safeUser = {
       id: user._id,
       email: user.email,
       username: user.username,
+      timezone: user.timezone,
     };
     res.json({ user: safeUser });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// PATCH /me - update user's timezone
+router.patch("/me", authMiddleware, async (req, res) => {
+  try {
+    const { timezone } = req.body;
+    if (typeof timezone !== "string" || timezone.length < 1 || timezone.length > 100) {
+      return res.status(400).json({ error: "Invalid timezone" });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { timezone, updatedAt: new Date() },
+      { new: true, select: "id _id email username timezone" }
+    );
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({
+      user: {
+        id: user._id,
+        email: user.email,
+        username: user.username,
+        timezone: user.timezone,
+      },
+      message: "Timezone updated",
+    });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
