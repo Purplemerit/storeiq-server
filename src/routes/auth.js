@@ -44,11 +44,13 @@ router.post("/register", async (req, res) => {
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
     res.cookie("token", token, {
-  httpOnly: true,                     // JS can't access it
-  secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-  sameSite: "strict",                  // CSRF protection
-  maxAge: 24 * 60 * 60 * 1000,         // 1 day
-});
+      httpOnly: true,                     // JS can't access it
+      secure: process.env.NODE_ENV === "production", // HTTPS only in prod
+      sameSite: "strict",                  // CSRF protection
+      maxAge: 24 * 60 * 60 * 1000,         // 1 day
+      path: "/",                           
+      
+    });
     res.status(201).json({
       token,
       user: { id: user._id, email: user.email, username: user.username },
@@ -80,11 +82,13 @@ router.post("/login", async (req, res) => {
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
     res.cookie("token", token, {
-  httpOnly: true,                     // JS can't access it
-  secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-  sameSite: "strict",                  // CSRF protection
-  maxAge: 24 * 60 * 60 * 1000,         // 1 day
-});
+      httpOnly: true,                     // JS can't access it
+      secure: process.env.NODE_ENV === "production", // HTTPS only in prod
+      sameSite: "strict",                  // CSRF protection
+      maxAge: 24 * 60 * 60 * 1000,         // 1 day
+      path: "/",                           
+      
+    });
     res.json({
       token,
       user: { id: user._id, email: user.email, username: user.username },
@@ -98,9 +102,15 @@ router.post("/login", async (req, res) => {
 // Protected route
 router.get("/me", authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
+    const user = await User.findById(req.user._id).select("id _id email username");
     if (!user) return res.status(404).json({ error: "User not found" });
-    res.json(user);
+    // Only expose safe fields
+    const safeUser = {
+      id: user._id,
+      email: user.email,
+      username: user.username,
+    };
+    res.json({ user: safeUser });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
