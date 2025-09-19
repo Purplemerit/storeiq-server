@@ -10,7 +10,25 @@ require("./facebookauth/facebookStrategy");
 
 // Import express
 const express = require("express");
+const cors = require("cors");
+
+// Initialize express app
 const app = express();
+
+// CORS configuration
+app.use(
+ cors({
+   origin: "http://localhost:5173",
+   credentials: true,
+   allowedHeaders: [
+     "Origin",
+     "X-Requested-With",
+     "Content-Type",
+     "Accept",
+     "Authorization"
+   ],
+ })
+);
 
 // Import all routes
 const routes = require("./routes");

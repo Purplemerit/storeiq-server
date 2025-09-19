@@ -59,11 +59,15 @@ async function getUserVideos(req, res) {
   try {
     const videos = await listUserVideosFromS3(userId);
     const formatted = videos.map(v => ({
+      id: v.key,
+      s3Key: v.key,
       title: v.title,
       s3Url: v.s3Url,
       url: v.s3Url,
       createdAt: v.createdAt,
-      thumbnail: v.thumbnail || null,
+      thumbnail: v.thumbnail || null, // Add logic here if thumbnails are stored with a convention
+      isEdited: v.isEdited || false,
+
     }));
     res.json(formatted);
   } catch (err) {
