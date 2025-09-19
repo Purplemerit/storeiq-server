@@ -51,22 +51,23 @@ async function handleGenerateVideo(req, res) {
  */
 const { listUserVideosFromS3 } = require('../s3Service');
 async function getUserVideos(req, res) {
-  const { userId } = req.query;
+  const userId = req.user && req.user._id ? req.user._id.toString() : null;
   if (!userId) {
-    return res.status(400).json({ error: 'Missing userId query parameter' });
+    return res.status(401).json({ error: 'User authentication required' });
   }
+
   try {
     const videos = await listUserVideosFromS3(userId);
-    // Ensure each object has required fields and thumbnail (null if not available)
     const formatted = videos.map(v => ({
       id: v.key,
       s3Key: v.key,
       title: v.title,
       s3Url: v.s3Url,
-      url: v.s3Url, // For frontend compatibility
+      url: v.s3Url,
       createdAt: v.createdAt,
       thumbnail: v.thumbnail || null, // Add logic here if thumbnails are stored with a convention
       isEdited: v.isEdited || false,
+
     }));
     res.json(formatted);
   } catch (err) {

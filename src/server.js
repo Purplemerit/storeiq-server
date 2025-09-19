@@ -1,7 +1,9 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
-const session = require("express-session");
+require("dotenv").config();
+const mongoose = require("mongoose");
 const passport = require("passport");
+const cookieParser = require("cookie-parser");
+const cors = require("cors");
+// Strategies
 require("./googleauth/googlestrategy");
 require("./githubauth/githubStrategy");
 require("./facebookauth/facebookStrategy");
@@ -31,51 +33,51 @@ app.use(
 // Import all routes
 const routes = require("./routes");
 const googleRoutes = require("../src/googleauth/googleroutes");
-const githubroutes = require("../src/githubauth/githubroutes");
-const facebookroutes = require("../src/facebookauth/facebookroutes");
+const githubRoutes = require("../src/githubauth/githubroutes");
+const facebookRoutes = require("../src/facebookauth/facebookroutes");
+
+const verifyJWT = require("../src/routes/authMiddleware"); // your JWT verifier
+
 // Define a port
 const PORT = process.env.PORT || 5000;
 
-// Middleware to parse JSON
-// Removed global express.json() to avoid interfering with file uploads
-//session middleware
+// Middleware
+app.use(express.json());
+app.use(cookieParser());
 app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "secret",
-    resave: false,
-    saveUninitialized: false,
+  cors({
+    origin: process.env.FRONTEND_URL, // frontend URL, e.g. http://localhost:3000
+    credentials: true, // allow cookies to be sent
   })
 );
-// Passport middleware
-app.use(passport.initialize());
-app.use(passport.session());
-// Enable JSON body parsing for all routes
-app.use(express.json());
+app.use(passport.initialize()); // no sessions
 
-// Mount all routes at /api
+// Mount routes
 app.use("/api", routes);
 app.use("/auth", googleRoutes);
-app.use("/auth", githubroutes);
-app.use("/auth", facebookroutes);
+app.use("/auth", githubRoutes);
+app.use("/auth", facebookRoutes);
+
 // Basic route
 app.get("/", (req, res) => {
   res.send("Backend server is running 🚀");
 });
-app.get("/dashboard", (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.redirect("/auth/google");
-  }
-  res.send(`Hello, ${req.user.displayName}`);
+
+// Protected route with JWT
+app.get("/dashboard", verifyJWT, (req, res) => {
+  res.send(`Hello, ${req.user.username}`);
 });
+
 // Connect to MongoDB and start server
-mongoose.connect(process.env.MONGODB_URI)
+mongoose
+  .connect(process.env.MONGODB_URI)
   .then(() => {
-    console.log('Connected to MongoDB');
+    console.log("Connected to MongoDB");
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   })
   .catch((err) => {
-    console.error('Failed to connect to MongoDB:', err);
+    console.error("Failed to connect to MongoDB:", err);
     process.exit(1);
   });

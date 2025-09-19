@@ -4,31 +4,62 @@ const passport = require("passport");
 require("../googleauth/googlestrategy");
 const jwt = require("jsonwebtoken");
 
-router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
-const FRONTEND_URL = process.env.FRONTEND_URL
+// --- GOOGLE LOGIN ---
+router.get(
+  "/google/login",
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    state: "login",
+  })
+);
 
+// --- GOOGLE REGISTER ---
+router.get(
+  "/google/register",
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    state: "register",
+  })
+);
+
+// --- GOOGLE CALLBACK ---
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
+  passport.authenticate("google", { failureRedirect: "/" ,session: false}),
   (req, res) => {
+    if (!req.user) {
+      return res.redirect(`${FRONTEND_URL}/login?error=NoAccount`);
+    }
+
+    // Generate JWT
     const token = jwt.sign(
-      { id: req.user._id, email: req.user.email },
+      {
+        id: req.user._id,
+        email: req.user.email,
+        username: req.user.username,
+      },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "1d" }
     );
 
-    // redirect with token as query param
-    // Use full URL from FRONTEND_URL (e.g., http://localhost:8080)
-    res.redirect(`${FRONTEND_URL}/dashboard?token=${token}`);
+    // Send as secure cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // only true in production
+  sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+    });
+
+    res.redirect(`${FRONTEND_URL}/dashboard`);
   }
 );
 
+// --- LOGOUT (clear cookie instead of passport logout) ---
 router.get("/logout", (req, res) => {
-  req.logout(err => {
-    if (err) return next(err);
-    res.redirect("/");
-  });
+  res.clearCookie("token");
+  res.redirect("/");
 });
 
 module.exports = router;

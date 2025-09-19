@@ -5,40 +5,46 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 function authMiddleware(req, res, next) {
-  // Log the content-type to confirm multipart/form-data requests
+  // Log for debugging
   console.log(`[authMiddleware] Content-Type: ${req.headers['content-type'] || 'N/A'}`);
-
-  // Log the incoming Authorization header
   console.log(`[authMiddleware] Incoming Authorization header:`, req.headers['authorization']);
+  console.log(`[authMiddleware] Cookies:`, req.cookies);
 
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.error(`[authMiddleware] Authorization header missing or malformed`);
-    return res.status(401).json({ error: 'Authorization header missing or malformed' });
+  let token;
+
+  // 1️⃣ Try cookie first (OAuth login)
+  if (req.cookies?.token) {
+    token = req.cookies.token;
+    console.log('[authMiddleware] Token found in cookie');
   }
 
-  const token = authHeader.split(' ')[1];
+  // 2️⃣ Fallback to Authorization header (Bearer token)
+  if (!token && req.headers['authorization']?.startsWith('Bearer ')) {
+    token = req.headers['authorization'].split(' ')[1];
+    console.log('[authMiddleware] Token found in Authorization header');
+  }
+
+  // 3️⃣ Token not found
   if (!token) {
-    console.error(`[authMiddleware] Token missing in Authorization header`);
-    return res.status(401).json({ error: 'Token missing' });
+    console.error('[authMiddleware] No token found in cookie or Authorization header');
+    return res.status(401).json({ error: 'User not authenticated (no token found)' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  // 4️⃣ Verify JWT
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
-      console.error(`[authMiddleware] JWT verification failed:`, err);
+      console.error('[authMiddleware] JWT verification failed:', err);
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
-    console.log(`[authMiddleware] JWT verified successfully. Decoded user:`, user);
-    req.user = user;
-    // Ensure req.user._id is set to decoded.id for downstream compatibility
-    if (user && user.id) {
-      req.user._id = user.id;
-    }
-    if (req.user) {
-      console.log(`[authMiddleware] req.user is set. Proceeding to next middleware.`);
-    } else {
-      console.error(`[authMiddleware] req.user is NOT set after JWT verification!`);
-    }
+
+    // 5️⃣ Attach user info to req.user
+    req.user = {
+      _id: decoded.id,
+      email: decoded.email,
+      username: decoded.username,
+    };
+
+    console.log('[authMiddleware] JWT verified successfully. req.user:', req.user);
     next();
   });
 }
