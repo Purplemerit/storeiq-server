@@ -172,9 +172,7 @@ async function listUserVideosFromS3(userId) {
   });
   try {
     const data = await s3.send(command);
-    console.log('[S3] Raw ListObjectsV2Command response:', JSON.stringify(data, null, 2));
     if (!data.Contents) {
-      console.log('[S3] No videos found for user:', userId);
       return [];
     }
     // Fetch metadata for each video (parallel)
@@ -186,7 +184,6 @@ async function listUserVideosFromS3(userId) {
             Bucket: AWS_BUCKET_NAME,
             Key: obj.Key,
           }));
-          console.log('[S3][DEBUG] Metadata for', obj.Key, head.Metadata);
           if (head.Metadata && head.Metadata.edited === "true") {
             isEdited = true;
           }
@@ -204,7 +201,6 @@ async function listUserVideosFromS3(userId) {
         };
       })
     );
-    console.log('[S3] Mapped video objects:', JSON.stringify(mapped, null, 2));
     return mapped;
   } catch (err) {
     console.error('[S3] Error listing user videos:', err);

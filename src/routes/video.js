@@ -6,7 +6,10 @@ const authMiddleware = require('./authMiddleware');
 const multer = require('multer');
 
 const router = express.Router();
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 const {
   createJob,
   getJob
