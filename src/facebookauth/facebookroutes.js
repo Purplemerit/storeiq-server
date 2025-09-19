@@ -2,30 +2,55 @@ const express = require("express");
 const router = express.Router();
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
-require("../facebookauth/facebookStrategy"); // your Facebook strategy
+require("../facebookauth/facebookStrategy"); // unified Facebook strategy
 const FRONTEND_URL = process.env.FRONTEND_URL;
 
-// Start Facebook OAuth
-router.get("/facebook", passport.authenticate("facebook", { scope: ["email"] }));
+// --- FACEBOOK LOGIN ---
+router.get(
+  "/facebook/login",
+  passport.authenticate("facebook", {
+    scope: ["email"],
+    state: "login",
+  })
+);
 
-// Callback
+// --- FACEBOOK REGISTER ---
+router.get(
+  "/facebook/register",
+  passport.authenticate("facebook", {
+    scope: ["email"],
+    state: "register",
+  })
+);
+
+// --- FACEBOOK CALLBACK ---
 router.get(
   "/facebook/callback",
-  passport.authenticate("facebook", { failureRedirect: "/" }),
+  passport.authenticate("facebook", { failureRedirect: "/",session: false }),
   (req, res) => {
-    const user = req.user; // Mongoose document
+    if (!req.user) {
+      return res.redirect(`${FRONTEND_URL}/login?error=NoAccount`);
+    }
 
-    // pick only the fields you want
+    const user = req.user; // Mongoose document
     const payload = {
       id: user._id,
       email: user.email,
-      username: user.username
+      username: user.username,
     };
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
 
-    // redirect to frontend with token
-    res.redirect(`${FRONTEND_URL}/dashboard?token=${token}`);
+   
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    res.redirect(`${FRONTEND_URL}/dashboard`);
   }
 );
 

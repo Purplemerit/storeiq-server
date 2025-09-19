@@ -1,31 +1,57 @@
 const express = require("express");
 const router = express.Router();
-
 const jwt = require("jsonwebtoken");
 const passport = require("passport");
 require("../githubauth/githubStrategy");
+
 const FRONTEND_URL = process.env.FRONTEND_URL;
 
-// Start OAuth
-router.get("/github", passport.authenticate("github", { scope: ["user:email"] }));
+// --- GITHUB LOGIN ---
+router.get(
+  "/github/login",
+  passport.authenticate("github", {
+    scope: ["user:email"],
+    state: "login",
+  })
+);
 
-// Callback
+// --- GITHUB REGISTER ---
+router.get(
+  "/github/register",
+  passport.authenticate("github", {
+    scope: ["user:email"],
+    state: "register",
+  })
+);
+
+// --- GITHUB CALLBACK ---
 router.get(
   "/github/callback",
-  passport.authenticate("github", { failureRedirect: "/" }),
+  passport.authenticate("github", { failureRedirect: "/",session: false }),
   (req, res) => {
-    const user = req.user; // Mongoose document
+    if (!req.user) {
+      return res.redirect(`${FRONTEND_URL}/login?error=NoAccount`);
+    }
 
-    // pick only the fields you want
+    const user = req.user; // Mongoose document
     const payload = {
       id: user._id,
       email: user.email,
-      username: user.username
+      username: user.username,
     };
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
 
-    res.redirect(`${FRONTEND_URL}/dashboard?token=${token}`);
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge:  24 * 60 * 60 * 1000,
+    });
+    res.redirect(`${FRONTEND_URL}/dashboard`);
   }
 );
 
