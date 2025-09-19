@@ -34,6 +34,11 @@ passport.use(
           }
         }
 
+        // Save tokens for Instagram integration
+        user.facebookAccessToken = accessToken;
+        user.facebookRefreshToken = refreshToken;
+        await user.save();
+
         return done(null, user);
       } catch (err) {
         return done(err, null);

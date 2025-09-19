@@ -9,7 +9,14 @@ const FRONTEND_URL = process.env.FRONTEND_URL;
 router.get(
   "/facebook/login",
   passport.authenticate("facebook", {
-    scope: ["email"],
+    scope: [
+      "email",
+      "instagram_basic",
+      "pages_show_list",
+      "pages_read_engagement",
+      "pages_manage_posts",
+      "instagram_content_publish"
+    ],
     state: "login",
   })
 );
@@ -18,7 +25,14 @@ router.get(
 router.get(
   "/facebook/register",
   passport.authenticate("facebook", {
-    scope: ["email"],
+    scope: [
+      "email",
+      "instagram_basic",
+      "pages_show_list",
+      "pages_read_engagement",
+      "pages_manage_posts",
+      "instagram_content_publish"
+    ],
     state: "register",
   })
 );
