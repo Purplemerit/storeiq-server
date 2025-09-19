@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const passport = require("passport");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const aiRoutes = require("../src/aimodel/routes"); 
 // Strategies
 require("./googleauth/googlestrategy");
 require("./githubauth/githubStrategy");
@@ -10,7 +11,7 @@ require("./facebookauth/facebookStrategy");
 
 // Import express
 const express = require("express");
-const cors = require("cors");
+
 
 // Initialize express app
 const app = express();
@@ -53,6 +54,7 @@ app.use(
 app.use(passport.initialize()); // no sessions
 
 // Mount routes
+app.use("/ai", aiRoutes);
 app.use("/api", routes);
 app.use("/auth", googleRoutes);
 app.use("/auth", githubRoutes);

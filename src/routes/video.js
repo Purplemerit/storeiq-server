@@ -6,7 +6,7 @@ const authMiddleware = require('./authMiddleware');
 const multer = require('multer');
 
 const router = express.Router();
-const authMiddleware = require('./authMiddleware');
+
 const {
   createJob,
   getJob
