@@ -10,7 +10,6 @@ require("./facebookauth/facebookStrategy");
 
 // Import express
 const express = require("express");
-const cors = require("cors");
 
 // Initialize express app
 const app = express();

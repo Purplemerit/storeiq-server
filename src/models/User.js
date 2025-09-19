@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
   // Metadata
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+  timezone: { type: String, default: 'UTC' },
 });
 
 // Automatically update `updatedAt` on save

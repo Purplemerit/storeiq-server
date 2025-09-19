@@ -12,6 +12,7 @@ const urlencoded = express.urlencoded;
 
 // aiRouter and scriptHistoryRouter need body parsing
 router.use("/auth", authRouter);
+router.use("/", authRouter); // Expose /me at /api/me
 router.use("/", bodyParser(), urlencoded({ extended: true }), aiRouter);
 router.use("/", videoRouter); // No body parser for videoRouter (upload-video)
 router.use("/scripts", bodyParser(), urlencoded({ extended: true }), scriptHistoryRouter);
