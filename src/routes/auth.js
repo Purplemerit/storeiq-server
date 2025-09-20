@@ -190,6 +190,46 @@ router.post("/link-youtube", authMiddleware, async (req, res) => {
 });
 
 
+// GET /api/auth/status - returns YouTube connection status
+router.get("/status", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("googleAccessToken");
+    res.json({
+      youtube: !!(user && user.googleAccessToken)
+      // Add other platforms here if needed, e.g. instagram: ...
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+/**
+ * POST /api/auth/disconnect-youtube
+ * Removes YouTube tokens from the user's record
+ */
+router.post("/disconnect-youtube", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const updateFields = {
+      googleAccessToken: undefined,
+      googleRefreshToken: undefined,
+      updatedAt: new Date(),
+    };
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $unset: { googleAccessToken: "", googleRefreshToken: "" }, $set: { updatedAt: new Date() } },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ message: "YouTube disconnected successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.use("/instagram", facebookAuthRouter);
 
 module.exports = router;
