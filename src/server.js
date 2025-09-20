@@ -58,6 +58,7 @@ app.use(passport.initialize()); // no sessions
 
 // Mount routes
 app.use("/ai", aiRoutes);
+app.use("/api/ai", aiRoutes);
 app.use("/api", routes);
 app.use("/auth", googleRoutes);
 app.use("/auth", githubRoutes);
