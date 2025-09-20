@@ -5,9 +5,6 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 function authMiddleware(req, res, next) {
-  // Log for debugging
-  // console.log(`[authMiddleware] Cookies:`, req.cookies);
-
   let token;
 
   // 1️⃣ Try cookie first (OAuth login)
@@ -39,6 +36,12 @@ function authMiddleware(req, res, next) {
       email: decoded.email,
       username: decoded.username,
     };
+
+    // Debug: Log whether user info was attached
+    if (req.user && req.user._id) {
+    } else {
+      console.warn('[authMiddleware] No user attached to req.user');
+    }
 
     next();
   });

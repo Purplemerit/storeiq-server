@@ -3,12 +3,16 @@ const User = require("../models/User");
 const s3Service = require("../s3Service");
 const { google } = require("googleapis");
 const axios = require("axios");
-// TODO: Add YouTube and Instagram SDKs/libraries as needed
+
 
 // POST /api/publish/youtube
 exports.publishToYouTube = async (req, res) => {
+  // Debug: Log incoming req.user
+  console.log('[publishToYouTube] Incoming req.user:', req.user);
   try {
     const user = await User.findById(req.user.id);
+    // Debug: Log result of user lookup
+    console.log('[publishToYouTube] User lookup result:', user);
     if (!user || !user.googleAccessToken) {
       return res.status(401).json({ error: "YouTube account not linked." });
     }
@@ -50,8 +54,12 @@ exports.publishToYouTube = async (req, res) => {
 
 // POST /api/publish/instagram
 exports.publishToInstagram = async (req, res) => {
+  // Debug: Log incoming req.user
+  console.log('[publishToInstagram] Incoming req.user:', req.user);
   try {
     const user = await User.findById(req.user.id);
+    // Debug: Log result of user lookup
+    console.log('[publishToInstagram] User lookup result:', user);
     if (!user || !user.facebookAccessToken) {
       return res.status(401).json({ error: "Instagram account not linked." });
     }
