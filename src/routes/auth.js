@@ -148,6 +148,23 @@ router.patch("/me", authMiddleware, async (req, res) => {
 });
 
 
+const passport = require("passport");
+
+// Initiate YouTube OAuth flow for connecting YouTube account
+router.get(
+ "/youtube",
+ passport.authenticate("google", {
+   scope: [
+     "profile",
+     "email",
+     "https://www.googleapis.com/auth/youtube.upload"
+   ],
+   state: "connect",
+   prompt: "consent", // force consent screen for re-auth
+   accessType: "offline"
+ })
+);
+
 router.use("/youtube", googleAuthRouter);
 router.use("/instagram", facebookAuthRouter);
 

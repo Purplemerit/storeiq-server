@@ -32,6 +32,8 @@ router.get(
   })
 );
 
+// --- YOUTUBE CONNECT (for linking YouTube to existing account) ---
+
 // --- GOOGLE CALLBACK ---
 router.get(
   "/google/callback",
