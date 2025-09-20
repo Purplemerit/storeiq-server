@@ -146,26 +146,50 @@ router.patch("/me", authMiddleware, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+/**
+ * POST /api/auth/link-youtube
+ * Requires: { accessToken, refreshToken } in body
+ * Stores tokens in logged-in user's record
+ */
+router.post("/link-youtube", authMiddleware, async (req, res) => {
+  try {
+    // Debug logging
+    console.log("[LINK YOUTUBE] req.body:", req.body);
+    const { accessToken, refreshToken } = req.body;
+    console.log("[LINK YOUTUBE] accessToken:", accessToken);
+    console.log("[LINK YOUTUBE] refreshToken:", refreshToken);
+
+    if (typeof accessToken !== "string" || !accessToken) {
+      return res.status(400).json({ error: "Missing or invalid accessToken" });
+    }
+
+    const userId = req.user._id;
+    const updateFields = {
+      googleAccessToken: accessToken,
+      updatedAt: new Date(),
+    };
+    if (typeof refreshToken === "string" && refreshToken) {
+      updateFields.googleRefreshToken = refreshToken;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      updateFields,
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ message: "YouTube tokens linked successfully" });
+  } catch (err) {
+    console.error("[LINK YOUTUBE ERROR]", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 
-const passport = require("passport");
-
-// Initiate YouTube OAuth flow for connecting YouTube account
-router.get(
- "/youtube",
- passport.authenticate("google", {
-   scope: [
-     "profile",
-     "email",
-     "https://www.googleapis.com/auth/youtube.upload"
-   ],
-   state: "connect",
-   prompt: "consent", // force consent screen for re-auth
-   accessType: "offline"
- })
-);
-
-router.use("/youtube", googleAuthRouter);
 router.use("/instagram", facebookAuthRouter);
 
 module.exports = router;

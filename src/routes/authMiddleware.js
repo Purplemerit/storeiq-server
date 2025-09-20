@@ -13,13 +13,11 @@ function authMiddleware(req, res, next) {
   // 1️⃣ Try cookie first (OAuth login)
   if (req.cookies?.token) {
     token = req.cookies.token;
-    console.log('[authMiddleware] Token found in cookie');
   }
 
   // 2️⃣ Fallback to Authorization header (Bearer token)
   if (!token && req.headers['authorization']?.startsWith('Bearer ')) {
     token = req.headers['authorization'].split(' ')[1];
-    console.log('[authMiddleware] Token found in Authorization header');
   }
 
   // 3️⃣ Token not found
@@ -42,7 +40,6 @@ function authMiddleware(req, res, next) {
       username: decoded.username,
     };
 
-    console.log('[authMiddleware] JWT verified successfully. req.user:', req.user);
     next();
   });
 }
