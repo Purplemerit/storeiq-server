@@ -35,6 +35,11 @@ passport.use(
           }
         }
 
+        // Save tokens for YouTube integration
+        user.googleAccessToken = accessToken;
+        user.googleRefreshToken = refreshToken;
+        await user.save();
+
         // 🚀 Passport passes the user back here
         return done(null, user);
       } catch (err) {
