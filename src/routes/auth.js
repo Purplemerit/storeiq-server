@@ -46,13 +46,23 @@ router.post("/register", async (req, res) => {
     await user.save();
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production" ? true : false,
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "none",
-      maxAge: 24 * 60 * 60 * 1000,
-      path: "/",
-    });
+    const cookieOptions =
+      process.env.NODE_ENV === "production"
+        ? {
+            httpOnly: true,
+            secure: true,
+            sameSite: "strict",
+            maxAge: 24 * 60 * 60 * 1000,
+            path: "/",
+          }
+        : {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 24 * 60 * 60 * 1000,
+            path: "/",
+          };
+    res.cookie("token", token, cookieOptions);
     res.status(201).json({
       token,
       user: { id: user._id, email: user.email, username: user.username },
@@ -83,13 +93,23 @@ router.post("/login", async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production" ? true : false,
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "none",
-      maxAge: 24 * 60 * 60 * 1000,
-      path: "/",
-    });
+    const cookieOptions =
+      process.env.NODE_ENV === "production"
+        ? {
+            httpOnly: true,
+            secure: true,
+            sameSite: "strict",
+            maxAge: 24 * 60 * 60 * 1000,
+            path: "/",
+          }
+        : {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 24 * 60 * 60 * 1000,
+            path: "/",
+          };
+    res.cookie("token", token, cookieOptions);
     res.json({
       token,
       user: { id: user._id, email: user.email, username: user.username },
