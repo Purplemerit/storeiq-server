@@ -28,6 +28,12 @@ router.delete('/delete-video', authMiddleware, async (req, res) => {
     return res.status(401).json({ error: 'User authentication required to delete video' });
   }
 
+  // Enforce user-level access: s3Key must start with userId
+  const username = req.user && req.user.username ? req.user.username : null;
+  const expectedPrefix = username ? `videos/${username}/` : userId;
+  if (!s3Key.startsWith(expectedPrefix)) {
+    return res.status(403).json({ error: 'Unauthorized: You do not have permission to delete this video.' });
+  }
   try {
     await deleteVideoFromS3(s3Key);
     res.json({ success: true });
@@ -61,10 +67,11 @@ router.post('/generate-video', authMiddleware, async (req, res) => {
     const result = await generateVideo(script, config);
 
     let s3Url = null;
+    const username = req.user && req.user.username ? req.user.username : null;
     if (result && typeof result === 'string' && isBase64(result)) {
-      s3Url = await uploadVideoBase64(result, userId);   // ✅ pass userId
+      s3Url = await uploadVideoBase64(result, userId, username, {});
     } else if (result && result.base64) {
-      s3Url = await uploadVideoBase64(result.base64, userId);  // ✅ pass userId
+      s3Url = await uploadVideoBase64(result.base64, userId, username, {});
     }
 
     res.json({
@@ -103,7 +110,8 @@ router.post(
     const { buffer, mimetype } = req.file;
 
     try {
-      const { url, key } = await uploadVideoBuffer(buffer, mimetype, userId);
+      const username = req.user && req.user.username ? req.user.username : null;
+      const { url, key } = await uploadVideoBuffer(buffer, mimetype, userId, username, {});
       res.json({ success: true, videoUrl: url, s3Key: key });
     } catch (err) {
       console.error('[UPLOAD-VIDEO] Error:', err);

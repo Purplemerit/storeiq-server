@@ -37,13 +37,30 @@ function authMiddleware(req, res, next) {
       username: decoded.username,
     };
 
-    // Debug: Log whether user info was attached
-    if (req.user && req.user._id) {
-    } else {
-      console.warn('[authMiddleware] No user attached to req.user');
-    }
-
-    next();
+        // If email or username is missing, fetch from DB and attach both
+        if (!req.user.username || !req.user.email) {
+          const User = require('../models/User');
+          User.findById(req.user._id)
+            .then(userDoc => {
+              // Debug log: log the full user document after fetching from DB
+              console.debug('[authMiddleware] User document fetched from DB:', userDoc);
+              if (userDoc) {
+                if (!req.user.username && userDoc.username) {
+                  req.user.username = userDoc.username;
+                }
+                if (!req.user.email && userDoc.email) {
+                  req.user.email = userDoc.email;
+                }
+              }
+              next();
+            })
+            .catch(err => {
+              console.error('[authMiddleware] Failed to fetch user from DB:', err);
+              next();
+            });
+        } else {
+          next();
+        }
   });
 }
 
