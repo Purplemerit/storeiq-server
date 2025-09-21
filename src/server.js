@@ -4,6 +4,7 @@ const passport = require("passport");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const aiRoutes = require("../src/aimodel/routes"); 
+const youtubeRoutes = require('./youtube/youtubeRoutes');
 // Strategies
 require("./googleauth/googlestrategy");
 require("./githubauth/githubStrategy");
@@ -59,7 +60,7 @@ app.use("/api", routes);
 app.use("/auth", googleRoutes);
 app.use("/auth", githubRoutes);
 app.use("/auth", facebookRoutes);
-
+app.use('/youtube', youtubeRoutes);
 // Basic route
 app.get("/", (req, res) => {
   res.send("Backend server is running 🚀");
