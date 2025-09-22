@@ -7,8 +7,6 @@ const axios = require("axios");
 
 // POST /api/publish/youtube
 exports.publishToYouTube = async (req, res) => {
-  // Debug: Log incoming req.user
-  console.log('[publishToYouTube] Incoming req.user:', req.user);
   try {
     // Enforce user-level access: s3Key must start with videos/{username}/
     const username = req.user && req.user.username ? req.user.username : null;
@@ -17,32 +15,18 @@ exports.publishToYouTube = async (req, res) => {
       return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
     }
     const user = await User.findById(req.user._id).select("+googleAccessToken");
-    // Explicit log after fetching user with googleAccessToken
-    console.log('[publishToYouTube] (explicit log after fetch) user.googleAccessToken:', user && user.googleAccessToken);
-    // Debug: Log user.googleAccessToken directly
-    console.log('[publishToYouTube] user.googleAccessToken:', user && user.googleAccessToken);
-    // Log raw value from user.get("googleAccessToken", null, { getters: false })
-    const rawTokenDebug = user && typeof user.get === "function"
-      ? user.get("googleAccessToken", null, { getters: false })
-      : undefined;
-    console.log('[publishToYouTube] user.get("googleAccessToken", null, { getters: false }):', rawTokenDebug);
-    // Debug: Log result of user lookup
-    console.log('[publishToYouTube] User lookup result:', user);
     let googleAccessToken = user && user.googleAccessToken;
-    if (!googleAccessToken && rawTokenDebug) {
-      console.warn(
-        "[publishToYouTube] WARNING: googleAccessToken missing, using raw value from DB. This may indicate legacy encryption or plugin issues."
-      );
-      console.log('[publishToYouTube] Using rawToken for publishing:', rawTokenDebug);
-      googleAccessToken = rawTokenDebug;
+    if (!googleAccessToken && user && typeof user.get === "function") {
+      const rawToken = user.get("googleAccessToken", null, { getters: false });
+      if (rawToken) {
+        googleAccessToken = rawToken;
+      }
     }
-    // If still missing, try native MongoDB driver
-    if (!googleAccessToken) {
+    if (!googleAccessToken && user) {
       const mongoose = require("mongoose");
       const nativeUser = await mongoose.connection.db
         .collection("users")
         .findOne({ _id: user._id }, { projection: { googleAccessToken: 1 } });
-      console.log('[publishToYouTube] (native driver) googleAccessToken:', nativeUser && nativeUser.googleAccessToken);
       if (nativeUser && nativeUser.googleAccessToken) {
         googleAccessToken = nativeUser.googleAccessToken;
       }

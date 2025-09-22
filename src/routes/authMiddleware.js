@@ -42,8 +42,6 @@ function authMiddleware(req, res, next) {
           const User = require('../models/User');
           User.findById(req.user._id)
             .then(userDoc => {
-              // Debug log: log the full user document after fetching from DB
-              console.debug('[authMiddleware] User document fetched from DB:', userDoc);
               if (userDoc) {
                 if (!req.user.username && userDoc.username) {
                   req.user.username = userDoc.username;
