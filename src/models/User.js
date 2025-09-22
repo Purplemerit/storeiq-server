@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-const mongooseEncryption = require("mongoose-encryption");
 
 const userSchema = new mongoose.Schema({
   username: { type: String, required: false }, // optional for OAuth
@@ -29,20 +28,6 @@ const userSchema = new mongoose.Schema({
 });
 
 // Encrypt only token fields
-const encKey = process.env.USER_ENCRYPTION_KEY;
-const sigKey = process.env.USER_SIGNING_KEY;
-if (encKey && sigKey) {
-  userSchema.plugin(mongooseEncryption, {
-    encryptionKey: Buffer.from(encKey, 'base64'),
-    signingKey: Buffer.from(sigKey, 'base64'),
-    encryptedFields: [
-      "googleAccessToken",
-      "googleRefreshToken",
-      "facebookAccessToken",
-      "facebookRefreshToken"
-    ]
-  });
-}
 
 // Automatically update `updatedAt` on save
 userSchema.pre("save", function (next) {

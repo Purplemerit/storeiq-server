@@ -76,8 +76,15 @@ async function processCropJob(job) {
     // Upload cropped video to S3
     const buffer = fs.readFileSync(outputPath);
     // Store cropped video in user-specific S3 folder/key
-    console.log(`[VIDEO-CROP][WORKER][UPLOAD] About to upload. userId:`, job.userId, 'typeof:', typeof job.userId);
-    const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId, { edited: "true" });
+    if (!job.username || typeof job.username !== "string" || job.username.trim().length === 0) {
+      const errMsg = `[VIDEO-CROP][WORKER][ERROR] job.username is missing or empty for jobId: ${job.jobId}`;
+      console.error(errMsg);
+      updateJob(job.jobId, { status: 'failed', error: 'username is required for S3 upload' });
+      throw new Error('username is required for S3 upload and must be present in crop job');
+    }
+    const username = job.username.trim();
+    console.log(`[VIDEO-CROP][WORKER][UPLOAD] About to upload. userId:`, job.userId, 'username:', username, 'typeof:', typeof job.userId);
+    const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId, username, { edited: "true" });
     console.log(`[VIDEO-CROP][WORKER][UPLOAD] S3 upload result:`, { url, key });
     updateJob(job.jobId, { status: 'completed', downloadUrl: url, error: null });
     console.log(`[VIDEO-CROP][WORKER] Completed crop job:`, {

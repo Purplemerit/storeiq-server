@@ -5,21 +5,16 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 function authMiddleware(req, res, next) {
-  // Log for debugging
-  // console.log(`[authMiddleware] Cookies:`, req.cookies);
-
   let token;
 
   // 1️⃣ Try cookie first (OAuth login)
   if (req.cookies?.token) {
     token = req.cookies.token;
-    console.log('[authMiddleware] Token found in cookie');
   }
 
   // 2️⃣ Fallback to Authorization header (Bearer token)
   if (!token && req.headers['authorization']?.startsWith('Bearer ')) {
     token = req.headers['authorization'].split(' ')[1];
-    console.log('[authMiddleware] Token found in Authorization header');
   }
 
   // 3️⃣ Token not found
@@ -42,8 +37,28 @@ function authMiddleware(req, res, next) {
       username: decoded.username,
     };
 
-    console.log('[authMiddleware] JWT verified successfully. req.user:', req.user);
-    next();
+        // If email or username is missing, fetch from DB and attach both
+        if (!req.user.username || !req.user.email) {
+          const User = require('../models/User');
+          User.findById(req.user._id)
+            .then(userDoc => {
+              if (userDoc) {
+                if (!req.user.username && userDoc.username) {
+                  req.user.username = userDoc.username;
+                }
+                if (!req.user.email && userDoc.email) {
+                  req.user.email = userDoc.email;
+                }
+              }
+              next();
+            })
+            .catch(err => {
+              console.error('[authMiddleware] Failed to fetch user from DB:', err);
+              next();
+            });
+        } else {
+          next();
+        }
   });
 }
 

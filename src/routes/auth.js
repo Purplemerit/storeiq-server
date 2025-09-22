@@ -46,14 +46,23 @@ router.post("/register", async (req, res) => {
     await user.save();
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
-    res.cookie("token", token, {
-      httpOnly: true,                     // JS can't access it
-      secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-      sameSite: "strict",                  // CSRF protection
-      maxAge: 24 * 60 * 60 * 1000,         // 1 day
-      path: "/",                           
-      
-    });
+    const cookieOptions =
+      process.env.NODE_ENV === "production"
+        ? {
+            httpOnly: true,
+            secure: true,
+            sameSite: "strict",
+            maxAge: 24 * 60 * 60 * 1000,
+            path: "/",
+          }
+        : {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 24 * 60 * 60 * 1000,
+            path: "/",
+          };
+    res.cookie("token", token, cookieOptions);
     res.status(201).json({
       token,
       user: { id: user._id, email: user.email, username: user.username },
@@ -84,14 +93,23 @@ router.post("/login", async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1d" });
-    res.cookie("token", token, {
-      httpOnly: true,                     // JS can't access it
-      secure: process.env.NODE_ENV === "production", // HTTPS only in prod
-      sameSite: "strict",                  // CSRF protection
-      maxAge: 24 * 60 * 60 * 1000,         // 1 day
-      path: "/",                           
-      
-    });
+    const cookieOptions =
+      process.env.NODE_ENV === "production"
+        ? {
+            httpOnly: true,
+            secure: true,
+            sameSite: "strict",
+            maxAge: 24 * 60 * 60 * 1000,
+            path: "/",
+          }
+        : {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 24 * 60 * 60 * 1000,
+            path: "/",
+          };
+    res.cookie("token", token, cookieOptions);
     res.json({
       token,
       user: { id: user._id, email: user.email, username: user.username },
@@ -146,9 +164,93 @@ router.patch("/me", authMiddleware, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+/**
+ * POST /api/auth/link-youtube
+ * Requires: { accessToken, refreshToken } in body
+ * Stores tokens in logged-in user's record
+ */
+router.post("/link-youtube", authMiddleware, async (req, res) => {
+  try {
+    // Debug logging
+    console.log("[LINK YOUTUBE] req.body:", req.body);
+    const { accessToken, refreshToken } = req.body;
+    console.log("[LINK YOUTUBE] accessToken:", accessToken);
+    console.log("[LINK YOUTUBE] refreshToken:", refreshToken);
+
+    if (typeof accessToken !== "string" || !accessToken) {
+      return res.status(400).json({ error: "Missing or invalid accessToken" });
+    }
+
+    const userId = req.user._id;
+    const setFields = {
+      googleAccessToken: accessToken,
+      updatedAt: new Date(),
+    };
+    if (typeof refreshToken === "string" && refreshToken) {
+      setFields.googleRefreshToken = refreshToken;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: setFields },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Log the full updated user document, including googleAccessToken
+    console.log("[LINK YOUTUBE] Updated user:", user);
+
+    res.json({ message: "YouTube tokens linked successfully" });
+  } catch (err) {
+    console.error("[LINK YOUTUBE ERROR]", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 
-router.use("/youtube", googleAuthRouter);
+// GET /api/auth/status - returns YouTube connection status
+router.get("/status", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("googleAccessToken");
+    res.json({
+      youtube: !!(user && user.googleAccessToken)
+      // Add other platforms here if needed, e.g. instagram: ...
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+/**
+ * POST /api/auth/disconnect-youtube
+ * Removes YouTube tokens from the user's record
+ */
+router.post("/disconnect-youtube", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const updateFields = {
+      googleAccessToken: undefined,
+      googleRefreshToken: undefined,
+      updatedAt: new Date(),
+    };
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $unset: { googleAccessToken: "", googleRefreshToken: "" }, $set: { updatedAt: new Date() } },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ message: "YouTube disconnected successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.use("/instagram", facebookAuthRouter);
 
 module.exports = router;

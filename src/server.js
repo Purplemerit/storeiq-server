@@ -58,6 +58,7 @@ app.use(passport.initialize()); // no sessions
 
 // Mount routes
 app.use("/ai", aiRoutes);
+app.use("/api/ai", aiRoutes);
 app.use("/api", routes);
 app.use("/auth", googleRoutes);
 app.use("/auth", githubRoutes);
@@ -80,6 +81,15 @@ mongoose
   .then(() => {
     console.log("Connected to MongoDB");
     app.listen(PORT, () => {
+      // Log presence and length of sensitive env vars (not values)
+      const encryptionKey = process.env.USER_ENCRYPTION_KEY;
+      const signingKey = process.env.USER_SIGNING_KEY;
+      console.log(
+        `[Startup] USER_ENCRYPTION_KEY present: ${!!encryptionKey}, length: ${encryptionKey ? encryptionKey.length : 0}`
+      );
+      console.log(
+        `[Startup] USER_SIGNING_KEY present: ${!!signingKey}, length: ${signingKey ? signingKey.length : 0}`
+      );
       console.log(`Server running on http://localhost:${PORT}`);
     });
   })

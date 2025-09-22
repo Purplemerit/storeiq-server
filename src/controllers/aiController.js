@@ -35,10 +35,11 @@ async function handleGenerateVideo(req, res) {
 
     // Upload generated video to S3
     const userId = req.user && req.user._id ? req.user._id.toString() : null;
+    const username = req.user && req.user.username ? req.user.username : null;
     if (!userId) {
       return res.status(401).json({ error: 'User authentication required to upload video' });
     }
-    const videoUrl = await uploadVideoBase64(videoResult, userId);
+    const videoUrl = await uploadVideoBase64(videoResult, userId, username, {});
     res.status(200).json({ videoUrl });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Internal server error' });
@@ -51,25 +52,28 @@ async function handleGenerateVideo(req, res) {
  */
 const { listUserVideosFromS3 } = require('../s3Service');
 async function getUserVideos(req, res) {
+  console.log('[GET /api/videos] req.user:', req.user, 'Properties:', req.user ? Object.keys(req.user) : null);
   const userId = req.user && req.user._id ? req.user._id.toString() : null;
+  const username = req.user && req.user.username ? req.user.username : null;
   if (!userId) {
     return res.status(401).json({ error: 'User authentication required' });
   }
 
   try {
-    const videos = await listUserVideosFromS3(userId);
-    const formatted = videos.map(v => ({
-      id: v.key,
-      s3Key: v.key,
-      title: v.title,
-      s3Url: v.s3Url,
-      url: v.s3Url,
-      createdAt: v.createdAt,
-      thumbnail: v.thumbnail || null, // Add logic here if thumbnails are stored with a convention
-      isEdited: v.isEdited || false,
-
-    }));
-    res.json(formatted);
+    const videos = await listUserVideosFromS3(userId, username || '');
+    const formatted = Array.isArray(videos)
+      ? videos.map(v => ({
+          id: v.key,
+          s3Key: v.key,
+          title: v.title,
+          s3Url: v.s3Url,
+          url: v.s3Url,
+          createdAt: v.createdAt,
+          thumbnail: v.thumbnail || null,
+          isEdited: v.isEdited || false,
+        }))
+      : [];
+    res.status(200).json(formatted);
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to fetch user videos' });
   }
