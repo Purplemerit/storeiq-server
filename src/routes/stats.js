@@ -94,46 +94,93 @@ router.get('/summary', authMiddleware, async (req, res) => {
 // GET /api/stats/timeseries
 router.get('/timeseries', authMiddleware, async (req, res) => {
   try {
-    const { videoType = 'all', startDate, endDate, interval = 'day' } = req.query;
+    const { startDate, endDate, interval = 'day' } = req.query;
     const userId = req.user._id;
-    const match = { userId };
 
-    // Date filtering
+    // Prepare date filtering for both models
     const start = parseDate(startDate);
     const end = parseDate(endDate);
-    if (start || end) {
-      match.createdAt = {};
-      if (start) match.createdAt.$gte = start;
-      if (end) match.createdAt.$lte = end;
+
+    // Helper for date filtering
+    function buildDateMatch(field) {
+      const match = {};
+      if (start || end) {
+        match[field] = {};
+        if (start) match[field].$gte = start;
+        if (end) match[field].$lte = end;
+      }
+      return match;
     }
 
-    // Group by interval (only 'day' supported for now)
-    const groupFormat = {
-      $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
-    };
+    // Group by day
+    const groupFormat = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
 
-    const data = await ScriptHistory.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: groupFormat,
-          count: { $sum: 1 }
-        }
-      },
+    // 1. Scripts generated per day
+    const scriptMatch = { userId: userId.toString(), ...buildDateMatch('createdAt') };
+    const scriptAgg = await ScriptHistory.aggregate([
+      { $match: scriptMatch },
+      { $group: { _id: groupFormat, count: { $sum: 1 } } },
       { $sort: { _id: 1 } }
     ]);
 
-    // For timeseries, also get AI videos per day (from S3)
-    // NOTE: S3 does not support timeseries queries; only ScriptHistory is shown in timeseries
+        // 2. AI Videos generated per day (from S3)
+        let aiVideoAgg = [];
+        try {
+          const username = req.user && req.user.username ? req.user.username : '';
+          const s3Videos = await listUserVideosFromS3(userId, username);
+    
+          // Group by day
+          const aiVideoMap = {};
+          s3Videos.forEach(v => {
+            // Use v.createdAt or v.CreationDate or v.LastModified (depending on S3 object structure)
+            let dateObj = v.createdAt ? new Date(v.createdAt) : (v.CreationDate ? new Date(v.CreationDate) : (v.LastModified ? new Date(v.LastModified) : null));
+            if (!dateObj || isNaN(dateObj.getTime())) return;
+            // Filter by date range if provided
+            if ((start && dateObj < start) || (end && dateObj > end)) return;
+            const dateStr = dateObj.toISOString().slice(0, 10);
+            aiVideoMap[dateStr] = (aiVideoMap[dateStr] || 0) + 1;
+          });
+          aiVideoAgg = Object.entries(aiVideoMap).map(([date, count]) => ({ _id: date, count }));
+          aiVideoAgg.sort((a, b) => a._id.localeCompare(b._id));
+        } catch (e) {
+          aiVideoAgg = [];
+        }
+
+    // 3. Published videos per day
+    const publishedMatch = {
+      owner: userId,
+      $or: [{ publishedToYouTube: true }, { publishCount: { $gt: 0 } }],
+      ...buildDateMatch('createdAt')
+    };
+    const publishedAgg = await Video.aggregate([
+      { $match: publishedMatch },
+      { $group: { _id: groupFormat, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ]);
+
+        // Merge all dates
+        const dateSet = new Set();
+        scriptAgg.forEach(d => dateSet.add(d._id));
+        aiVideoAgg.forEach(d => dateSet.add(d._id));
+        publishedAgg.forEach(d => dateSet.add(d._id));
+        const allDates = Array.from(dateSet).sort();
+
+        // Build date -> count maps
+        const scriptMap = Object.fromEntries(scriptAgg.map(d => [d._id, d.count]));
+        const aiVideoMap = Object.fromEntries(aiVideoAgg.map(d => [d._id, d.count]));
+        const publishedMap = Object.fromEntries(publishedAgg.map(d => [d._id, d.count]));
+
+        // Fill missing dates with zeroes
+        const data = allDates.map(date => ({
+          date,
+          aiVideosGeneratedCount: aiVideoMap[date] || 0,
+          scriptGeneratedCount: scriptMap[date] || 0,
+          publishedCount: publishedMap[date] || 0
+        }));
+
     res.json({
-      interval,
-      data: data.map(d => ({
-        date: d._id,
-        totalScripts: d.count,
-        totalAIVideos: null, // Not available per day from S3
-        totalPublishedYouTube: null,
-        totalPublishedInstagram: null
-      }))
+      interval: "day",
+      data
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch time-series stats.' });
