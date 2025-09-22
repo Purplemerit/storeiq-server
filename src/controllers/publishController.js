@@ -1,9 +1,9 @@
+const stream = require("stream");
 // Controller for publishing videos to YouTube and Instagram using stored tokens
 const User = require("../models/User");
 const s3Service = require("../s3Service");
 const { google } = require("googleapis");
 const axios = require("axios");
-
 
 // POST /api/publish/youtube
 exports.publishToYouTube = async (req, res) => {
@@ -16,21 +16,55 @@ exports.publishToYouTube = async (req, res) => {
     if (!req.body.s3Key || typeof req.body.s3Key !== "string" || !req.body.s3Key.startsWith(expectedPrefix)) {
       return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
     }
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).select("+googleAccessToken");
+    // Explicit log after fetching user with googleAccessToken
+    console.log('[publishToYouTube] (explicit log after fetch) user.googleAccessToken:', user && user.googleAccessToken);
+    // Debug: Log user.googleAccessToken directly
+    console.log('[publishToYouTube] user.googleAccessToken:', user && user.googleAccessToken);
+    // Log raw value from user.get("googleAccessToken", null, { getters: false })
+    const rawTokenDebug = user && typeof user.get === "function"
+      ? user.get("googleAccessToken", null, { getters: false })
+      : undefined;
+    console.log('[publishToYouTube] user.get("googleAccessToken", null, { getters: false }):', rawTokenDebug);
     // Debug: Log result of user lookup
     console.log('[publishToYouTube] User lookup result:', user);
-    if (!user || !user.googleAccessToken) {
+    let googleAccessToken = user && user.googleAccessToken;
+    if (!googleAccessToken && rawTokenDebug) {
+      console.warn(
+        "[publishToYouTube] WARNING: googleAccessToken missing, using raw value from DB. This may indicate legacy encryption or plugin issues."
+      );
+      console.log('[publishToYouTube] Using rawToken for publishing:', rawTokenDebug);
+      googleAccessToken = rawTokenDebug;
+    }
+    // If still missing, try native MongoDB driver
+    if (!googleAccessToken) {
+      const mongoose = require("mongoose");
+      const nativeUser = await mongoose.connection.db
+        .collection("users")
+        .findOne({ _id: user._id }, { projection: { googleAccessToken: 1 } });
+      console.log('[publishToYouTube] (native driver) googleAccessToken:', nativeUser && nativeUser.googleAccessToken);
+      if (nativeUser && nativeUser.googleAccessToken) {
+        googleAccessToken = nativeUser.googleAccessToken;
+      }
+    }
+    if (!user || !googleAccessToken) {
       return res.status(401).json({ error: "YouTube account not linked." });
     }
     // Fetch video file from S3 (filename in req.body.s3Key)
     const videoBuffer = await s3Service.getFileBuffer(req.body.s3Key);
+    // Properly authenticate using OAuth2 client with user's access token
+    const { OAuth2 } = google.auth;
+    const oauth2Client = new OAuth2();
+    oauth2Client.setCredentials({ access_token: googleAccessToken });
     const youtube = google.youtube({
       version: "v3",
-      auth: user.googleAccessToken,
+      auth: oauth2Client,
     });
     const { title, description } = req.body.metadata || {};
     const media = {
-      body: Buffer.isBuffer(videoBuffer) ? videoBuffer : Buffer.from(videoBuffer),
+      body: Buffer.isBuffer(videoBuffer)
+        ? stream.Readable.from(videoBuffer)
+        : stream.Readable.from(Buffer.from(videoBuffer)),
     };
     const requestBody = {
       snippet: {

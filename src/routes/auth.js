@@ -182,23 +182,26 @@ router.post("/link-youtube", authMiddleware, async (req, res) => {
     }
 
     const userId = req.user._id;
-    const updateFields = {
+    const setFields = {
       googleAccessToken: accessToken,
       updatedAt: new Date(),
     };
     if (typeof refreshToken === "string" && refreshToken) {
-      updateFields.googleRefreshToken = refreshToken;
+      setFields.googleRefreshToken = refreshToken;
     }
 
     const user = await User.findByIdAndUpdate(
       userId,
-      updateFields,
+      { $set: setFields },
       { new: true }
     );
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+
+    // Log the full updated user document, including googleAccessToken
+    console.log("[LINK YOUTUBE] Updated user:", user);
 
     res.json({ message: "YouTube tokens linked successfully" });
   } catch (err) {

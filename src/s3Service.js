@@ -353,6 +353,37 @@ async function abortMultipartUpload(key, uploadId) {
   await s3.send(command);
 }
 
+/**
+ * Fetches a file from S3 and returns its buffer.
+ * @param {string} key - The S3 object key to fetch.
+ * @returns {Promise<Buffer>} - Buffer of the file.
+ */
+async function getFileBuffer(key) {
+  if (!key) throw new Error('S3 key is required');
+  const { GetObjectCommand } = require('@aws-sdk/client-s3');
+  const command = new GetObjectCommand({
+    Bucket: AWS_BUCKET_NAME,
+    Key: key,
+  });
+  const response = await s3.send(command);
+  // response.Body is a stream, so we need to convert it to a buffer
+  return await streamToBuffer(response.Body);
+}
+
+/**
+ * Helper to convert a readable stream to a buffer.
+ * @param {Readable} stream
+ * @returns {Promise<Buffer>}
+ */
+function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
+
 module.exports = {
   uploadVideoBase64,
   uploadVideoBuffer,
@@ -363,4 +394,5 @@ module.exports = {
   generateMultipartPresignedUrls,
   completeMultipartUpload,
   abortMultipartUpload,
+  getFileBuffer,
 };
