@@ -12,11 +12,11 @@ exports.publishToYouTube = async (req, res) => {
   try {
     // Enforce user-level access: s3Key must start with videos/{username}/
     const username = req.user && req.user.username ? req.user.username : null;
-    const expectedPrefix = username ? `videos/${username}/` : req.user.id;
+    const expectedPrefix = username ? `videos/${username}/` : req.user._id;
     if (!req.body.s3Key || typeof req.body.s3Key !== "string" || !req.body.s3Key.startsWith(expectedPrefix)) {
       return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
     }
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user._id);
     // Debug: Log result of user lookup
     console.log('[publishToYouTube] User lookup result:', user);
     if (!user || !user.googleAccessToken) {
