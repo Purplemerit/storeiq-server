@@ -5,6 +5,9 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const authMiddleware = require("./authMiddleware");
 
+const googleAuthRouter = require("../googleauth/googleroutes");
+const facebookAuthRouter = require("../facebookauth/facebookroutes");
+
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -144,5 +147,8 @@ router.patch("/me", authMiddleware, async (req, res) => {
   }
 });
 
+
+router.use("/youtube", googleAuthRouter);
+router.use("/instagram", facebookAuthRouter);
 
 module.exports = router;

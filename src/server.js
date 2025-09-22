@@ -40,6 +40,9 @@ const facebookRoutes = require("../src/facebookauth/facebookroutes");
 
 const verifyJWT = require("../src/routes/authMiddleware"); // your JWT verifier
 
+// Publish routes
+const publishRoutes = require("./routes/publish");
+
 // Define a port
 const PORT = process.env.PORT || 5000;
 
@@ -60,6 +63,8 @@ app.use("/api", routes);
 app.use("/auth", googleRoutes);
 app.use("/auth", githubRoutes);
 app.use("/auth", facebookRoutes);
+app.use("/api/publish", publishRoutes);
+
 app.use('/youtube', youtubeRoutes);
 // Basic route
 app.get("/", (req, res) => {

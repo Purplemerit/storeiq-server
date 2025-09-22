@@ -10,7 +10,11 @@ const FRONTEND_URL = process.env.FRONTEND_URL;
 router.get(
   "/google/login",
   passport.authenticate("google", {
-    scope: ["profile", "email"],
+    scope: [
+      "profile",
+      "email",
+      "https://www.googleapis.com/auth/youtube.upload"
+    ],
     state: "login",
   })
 );
@@ -19,7 +23,11 @@ router.get(
 router.get(
   "/google/register",
   passport.authenticate("google", {
-    scope: ["profile", "email"],
+    scope: [
+      "profile",
+      "email",
+      "https://www.googleapis.com/auth/youtube.upload"
+    ],
     state: "register",
   })
 );
