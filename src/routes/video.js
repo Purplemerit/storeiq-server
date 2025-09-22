@@ -250,14 +250,42 @@ router.post('/s3-multipart/abort', authMiddleware, async (req, res) => {
  * Body: { videoUrl (or s3Key), start, end }
  * Returns: { jobId, status }
  */
+const User = require('../models/User');
+
 router.post('/video/crop', authMiddleware, async (req, res) => {
   const { videoUrl, s3Key, start, end } = req.body;
   // Extract userId from authenticated user
   const userId = req.user && req.user._id ? req.user._id.toString() : null;
+  let username = req.user && req.user.username ? req.user.username : null;
+
+  // If username is missing, fetch from DB
+  if (!username && userId) {
+    try {
+      const userDoc = await User.findById(userId).select('username');
+      if (userDoc && userDoc.username) {
+        username = userDoc.username;
+      }
+    } catch (e) {
+      console.error('[VIDEO-CROP][API] Failed to fetch username from DB:', e);
+    }
+  }
+
   console.log('[VIDEO-CROP][API] Incoming crop request:', {
-    videoUrl, s3Key, start, end, userId,
+    videoUrl, s3Key, start, end, userId, username,
     reqUser: req.user
   });
+  
+  // Debug log to confirm username is present in crop job data
+  console.log('[VIDEO-CROP][API] Crop job data before creation:', {
+    type: 'crop',
+    videoUrl,
+    s3Key,
+    start,
+    end,
+    userId,
+    username
+  });
+  
   if ((!videoUrl && !s3Key) || typeof start !== 'number' || typeof end !== 'number') {
     return res.status(400).json({ error: 'Missing or invalid videoUrl/s3Key, start, or end' });
   }
@@ -271,7 +299,8 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
       s3Key,
       start,
       end,
-      userId
+      userId,
+      username
     });
     console.log(`[VIDEO-CROP][API] Created crop job:`, {
       jobId: job.jobId,
@@ -280,6 +309,7 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
       start: job.start,
       end: job.end,
       userId: job.userId,
+      username: job.username,
       status: job.status
     });
     res.json({ jobId: job.jobId, status: job.status });

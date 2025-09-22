@@ -17,7 +17,7 @@ function saveJobs(jobs) {
   fs.writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2));
 }
 
-function createJob({ type, videoUrl, s3Key, start, end, userId }) {
+function createJob({ type, videoUrl, s3Key, start, end, userId, username }) {
   const jobs = loadJobs();
   const jobId = Math.random().toString(36).slice(2, 12);
   jobs[jobId] = {
@@ -28,6 +28,7 @@ function createJob({ type, videoUrl, s3Key, start, end, userId }) {
     start,
     end,
     userId,
+    username,
     status: 'pending',
     error: null,
     downloadUrl: null,
