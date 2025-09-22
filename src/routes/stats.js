@@ -5,6 +5,7 @@ const router = express.Router();
 const authMiddleware = require('./authMiddleware');
 const ScriptHistory = require('../models/ScriptHistory');
 const { listUserVideosFromS3 } = require('../s3Service');
+const Video = require('../models/Video');
 
 // Helper: parse date or return undefined
 function parseDate(dateStr) {
@@ -43,7 +44,16 @@ router.get('/summary', authMiddleware, async (req, res) => {
       totalAIVideos = 0;
     }
 
-    // No persistent publish log; set published counts to 0
+    // Count published videos for this user (publishedToYouTube true OR publishCount > 0)
+    const publishedFilter = {
+      owner: userId,
+      $or: [
+        { publishedToYouTube: true },
+        { publishCount: { $gt: 0 } }
+      ]
+    };
+    const publishedCount = await Video.countDocuments(publishedFilter);
+
     res.json({
       stats: [
         {
@@ -62,7 +72,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
         },
         {
           title: "Videos Published to YouTube",
-          value: 0,
+          value: publishedCount,
           change: "0%",
           changeType: "positive",
           comparison: "vs previous"
