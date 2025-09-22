@@ -8,8 +8,9 @@ passport.use(
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: "/auth/google/callback",
+      passReqToCallback: true,
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => {
       try {
         // First check if user exists by googleId
         let user = await User.findOne({ googleId: profile.id });
@@ -35,9 +36,6 @@ passport.use(
           }
         }
 
-        // Save tokens for YouTube integration
-        user.googleAccessToken = accessToken;
-        user.googleRefreshToken = refreshToken;
         await user.save();
 
         // 🚀 Passport passes the user back here

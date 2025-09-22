@@ -1,26 +1,54 @@
+const stream = require("stream");
 // Controller for publishing videos to YouTube and Instagram using stored tokens
 const User = require("../models/User");
 const s3Service = require("../s3Service");
 const { google } = require("googleapis");
 const axios = require("axios");
-// TODO: Add YouTube and Instagram SDKs/libraries as needed
 
 // POST /api/publish/youtube
 exports.publishToYouTube = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    if (!user || !user.googleAccessToken) {
+    // Enforce user-level access: s3Key must start with videos/{username}/
+    const username = req.user && req.user.username ? req.user.username : null;
+    const expectedPrefix = username ? `videos/${username}/` : req.user._id;
+    if (!req.body.s3Key || typeof req.body.s3Key !== "string" || !req.body.s3Key.startsWith(expectedPrefix)) {
+      return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
+    }
+    const user = await User.findById(req.user._id).select("+googleAccessToken");
+    let googleAccessToken = user && user.googleAccessToken;
+    if (!googleAccessToken && user && typeof user.get === "function") {
+      const rawToken = user.get("googleAccessToken", null, { getters: false });
+      if (rawToken) {
+        googleAccessToken = rawToken;
+      }
+    }
+    if (!googleAccessToken && user) {
+      const mongoose = require("mongoose");
+      const nativeUser = await mongoose.connection.db
+        .collection("users")
+        .findOne({ _id: user._id }, { projection: { googleAccessToken: 1 } });
+      if (nativeUser && nativeUser.googleAccessToken) {
+        googleAccessToken = nativeUser.googleAccessToken;
+      }
+    }
+    if (!user || !googleAccessToken) {
       return res.status(401).json({ error: "YouTube account not linked." });
     }
     // Fetch video file from S3 (filename in req.body.s3Key)
     const videoBuffer = await s3Service.getFileBuffer(req.body.s3Key);
+    // Properly authenticate using OAuth2 client with user's access token
+    const { OAuth2 } = google.auth;
+    const oauth2Client = new OAuth2();
+    oauth2Client.setCredentials({ access_token: googleAccessToken });
     const youtube = google.youtube({
       version: "v3",
-      auth: user.googleAccessToken,
+      auth: oauth2Client,
     });
     const { title, description } = req.body.metadata || {};
     const media = {
-      body: Buffer.isBuffer(videoBuffer) ? videoBuffer : Buffer.from(videoBuffer),
+      body: Buffer.isBuffer(videoBuffer)
+        ? stream.Readable.from(videoBuffer)
+        : stream.Readable.from(Buffer.from(videoBuffer)),
     };
     const requestBody = {
       snippet: {
@@ -50,8 +78,18 @@ exports.publishToYouTube = async (req, res) => {
 
 // POST /api/publish/instagram
 exports.publishToInstagram = async (req, res) => {
+  // Debug: Log incoming req.user
+  console.log('[publishToInstagram] Incoming req.user:', req.user);
   try {
+    // Enforce user-level access: s3Key must start with videos/{username}/
+    const username = req.user && req.user.username ? req.user.username : null;
+    const expectedPrefix = username ? `videos/${username}/` : req.user.id;
+    if (!req.body.s3Key || typeof req.body.s3Key !== "string" || !req.body.s3Key.startsWith(expectedPrefix)) {
+      return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
+    }
     const user = await User.findById(req.user.id);
+    // Debug: Log result of user lookup
+    console.log('[publishToInstagram] User lookup result:', user);
     if (!user || !user.facebookAccessToken) {
       return res.status(401).json({ error: "Instagram account not linked." });
     }

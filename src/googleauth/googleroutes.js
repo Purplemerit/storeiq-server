@@ -13,7 +13,6 @@ router.get(
     scope: [
       "profile",
       "email",
-      "https://www.googleapis.com/auth/youtube.upload"
     ],
     state: "login",
   })
@@ -26,22 +25,24 @@ router.get(
     scope: [
       "profile",
       "email",
-      "https://www.googleapis.com/auth/youtube.upload"
     ],
     state: "register",
   })
 );
 
+// --- YOUTUBE CONNECT (for linking YouTube to existing account) ---
+
 // --- GOOGLE CALLBACK ---
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" ,session: false}),
-  (req, res) => {
+  passport.authenticate("google", { failureRedirect: "/", session: false }),
+  async (req, res) => {
     if (!req.user) {
       return res.redirect(`${FRONTEND_URL}/login?error=NoAccount`);
     }
 
-    // Generate JWT
+
+    // Default: normal login/signup with Google
     const token = jwt.sign(
       {
         id: req.user._id,
@@ -52,12 +53,11 @@ router.get(
       { expiresIn: "1d" }
     );
 
-    // Send as secure cookie
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // only true in production
-  sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.redirect(`${FRONTEND_URL}/dashboard`);

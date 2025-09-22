@@ -33,11 +33,13 @@ router.post("/generate-video", verifyJWT, async (req, res) => {
       const buffer = Buffer.from(response.data);
 
       // 🔽 Upload to S3 in user folder
+      const username = req.user && req.user.username ? req.user.username : userId;
       const { url, key } = await uploadVideoBuffer(
         buffer,
         "video/mp4",
         userId,
-        `generated-${Date.now()}.mp4` // optional custom filename
+        username,
+        { generated: "true" }
       );
       s3Url = url;
       s3Key = key;

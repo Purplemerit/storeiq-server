@@ -1239,5 +1239,33 @@
     "downloadUrl": null,
     "createdAt": "2025-09-22T07:26:11.526Z",
     "updatedAt": "2025-09-22T07:26:14.359Z"
+  },
+  "iyv9xigzfq": {
+    "jobId": "iyv9xigzfq",
+    "type": "crop",
+    "videoUrl": "https://store-iq-bucket.s3.ap-south-1.amazonaws.com/videos/HARSH VARDHAN SINGH/video-1758526526576-63e3240abfb7.mp4",
+    "start": 0.3,
+    "end": 1.2,
+    "userId": "68cce2752fb40fe854385bb5",
+    "username": "HARSH VARDHAN SINGH",
+    "status": "failed",
+    "error": "spawn ffmpeg ENOENT",
+    "downloadUrl": null,
+    "createdAt": "2025-09-22T07:50:06.395Z",
+    "updatedAt": "2025-09-22T07:50:13.501Z"
+  },
+  "uy5tq7ohuc": {
+    "jobId": "uy5tq7ohuc",
+    "type": "crop",
+    "videoUrl": "https://store-iq-bucket.s3.ap-south-1.amazonaws.com/videos/HARSH VARDHAN SINGH/video-1758527381438-9fceb762ab6b.mp4",
+    "start": 0.2,
+    "end": 1.6,
+    "userId": "68cce2752fb40fe854385bb5",
+    "username": "HARSH VARDHAN SINGH",
+    "status": "failed",
+    "error": "spawn ffmpeg ENOENT",
+    "downloadUrl": null,
+    "createdAt": "2025-09-22T16:38:57.312Z",
+    "updatedAt": "2025-09-22T16:39:05.202Z"
   }
 }

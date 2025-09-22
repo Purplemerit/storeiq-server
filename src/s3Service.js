@@ -44,10 +44,20 @@ const s3 = new S3Client({
  * @param {string} userId - MongoDB ObjectId of the authenticated user.
  * @returns {Promise<string>} - Public S3 URL of the uploaded video.
  */
-async function uploadVideoBase64(videoBase64, userId) {
+/**
+ * @param {string} videoBase64
+ * @param {string} userId
+ * @param {string} username
+ * @param {object} metadata
+ */
+async function uploadVideoBase64(videoBase64, userId, username, metadata = {}) {
   if (!userId) {
     throw new Error('userId is required for video upload');
   }
+  // Use username if available and non-empty, else fallback to userId
+  const safeUsername = (username && typeof username === "string" && username.trim().length > 0)
+    ? username.trim()
+    : userId;
   try {
     // Extract mimetype if present in data URL, default to video/mp4
     let mimetype = 'video/mp4';
@@ -69,16 +79,14 @@ async function uploadVideoBase64(videoBase64, userId) {
     if (mimetype && mimetype.split('/')[1]) {
       ext = mimetype.split('/')[1];
     }
-    // S3 does not require manual folder creation. Using a prefix like 'videos/{userId}/' in the object key
-    // will automatically organize files in a virtual folder structure in the S3 console. No explicit folder
-    // creation is needed—just set the key as 'videos/{userId}/{filename}' and S3 handles the rest.
-    const key = `videos/${userId}/video-${timestamp}-${random}.${ext}`;
+    const key = `videos/${safeUsername}/video-${timestamp}-${random}.${ext}`;
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,
       Key: key,
       Body: buffer,
       ContentType: mimetype,
+      Metadata: { ...metadata, userid: userId }
     });
 
     await s3.send(command);
@@ -103,10 +111,20 @@ async function uploadVideoBase64(videoBase64, userId) {
  * @param {string} userId - MongoDB ObjectId of the authenticated user.
  * @returns {Promise<{ url: string, key: string }>}
  */
-async function uploadVideoBuffer(buffer, mimetype, userId, metadata = {}) {
+/**
+ * @param {Buffer} buffer
+ * @param {string} mimetype
+ * @param {string} userId
+ * @param {string} username
+ * @param {object} metadata
+ */
+async function uploadVideoBuffer(buffer, mimetype, userId, username, metadata = {}) {
   if (!userId) {
     throw new Error('userId is required for video upload');
   }
+  const safeUsername = (username && typeof username === "string" && username.trim().length > 0)
+    ? username.trim()
+    : userId;
   try {
     const timestamp = Date.now();
     const random = crypto.randomBytes(6).toString('hex');
@@ -115,15 +133,15 @@ async function uploadVideoBuffer(buffer, mimetype, userId, metadata = {}) {
     if (mimetype && mimetype.split('/')[1]) {
       ext = mimetype.split('/')[1];
     }
-    const key = `videos/${userId}/video-${timestamp}-${random}.${ext}`;
-    console.log('[S3][UPLOAD] userId:', userId, 'key:', key);
+    const key = `videos/${safeUsername}/video-${timestamp}-${random}.${ext}`;
+    console.log('[S3][UPLOAD] userId:', userId, 'username:', username, 'key:', key);
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,
       Key: key,
       Body: buffer,
       ContentType: mimetype || 'video/mp4',
-      Metadata: metadata,
+      Metadata: { ...metadata, userid: userId },
     });
 
     await s3.send(command);
@@ -162,10 +180,17 @@ const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
  */
 const { HeadObjectCommand } = require('@aws-sdk/client-s3');
 
-async function listUserVideosFromS3(userId) {
+/**
+ * @param {string} userId
+ * @param {string} username
+ */
+async function listUserVideosFromS3(userId, username) {
   if (!userId) throw new Error('userId is required');
-  // Assuming videos are stored with a prefix per user, e.g. "videos/{userId}/"
-  const prefix = `videos/${userId}/`;
+  const safeUsername = (username && typeof username === "string" && username.trim().length > 0)
+    ? username.trim()
+    : userId;
+  // Now videos are stored with a prefix per username, e.g. "videos/{username}/"
+  const prefix = `videos/${safeUsername}/`;
   const command = new ListObjectsV2Command({
     Bucket: AWS_BUCKET_NAME,
     Prefix: prefix,
@@ -328,6 +353,37 @@ async function abortMultipartUpload(key, uploadId) {
   await s3.send(command);
 }
 
+/**
+ * Fetches a file from S3 and returns its buffer.
+ * @param {string} key - The S3 object key to fetch.
+ * @returns {Promise<Buffer>} - Buffer of the file.
+ */
+async function getFileBuffer(key) {
+  if (!key) throw new Error('S3 key is required');
+  const { GetObjectCommand } = require('@aws-sdk/client-s3');
+  const command = new GetObjectCommand({
+    Bucket: AWS_BUCKET_NAME,
+    Key: key,
+  });
+  const response = await s3.send(command);
+  // response.Body is a stream, so we need to convert it to a buffer
+  return await streamToBuffer(response.Body);
+}
+
+/**
+ * Helper to convert a readable stream to a buffer.
+ * @param {Readable} stream
+ * @returns {Promise<Buffer>}
+ */
+function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
+
 module.exports = {
   uploadVideoBase64,
   uploadVideoBuffer,
@@ -338,4 +394,5 @@ module.exports = {
   generateMultipartPresignedUrls,
   completeMultipartUpload,
   abortMultipartUpload,
+  getFileBuffer,
 };

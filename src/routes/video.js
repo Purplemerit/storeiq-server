@@ -28,6 +28,12 @@ router.delete('/delete-video', authMiddleware, async (req, res) => {
     return res.status(401).json({ error: 'User authentication required to delete video' });
   }
 
+  // Enforce user-level access: s3Key must start with userId
+  const username = req.user && req.user.username ? req.user.username : null;
+  const expectedPrefix = username ? `videos/${username}/` : userId;
+  if (!s3Key.startsWith(expectedPrefix)) {
+    return res.status(403).json({ error: 'Unauthorized: You do not have permission to delete this video.' });
+  }
   try {
     await deleteVideoFromS3(s3Key);
     res.json({ success: true });
@@ -61,10 +67,11 @@ router.post('/generate-video', authMiddleware, async (req, res) => {
     const result = await generateVideo(script, config);
 
     let s3Url = null;
+    const username = req.user && req.user.username ? req.user.username : null;
     if (result && typeof result === 'string' && isBase64(result)) {
-      s3Url = await uploadVideoBase64(result, userId);   // ✅ pass userId
+      s3Url = await uploadVideoBase64(result, userId, username, {});
     } else if (result && result.base64) {
-      s3Url = await uploadVideoBase64(result.base64, userId);  // ✅ pass userId
+      s3Url = await uploadVideoBase64(result.base64, userId, username, {});
     }
 
     res.json({
@@ -103,7 +110,8 @@ router.post(
     const { buffer, mimetype } = req.file;
 
     try {
-      const { url, key } = await uploadVideoBuffer(buffer, mimetype, userId);
+      const username = req.user && req.user.username ? req.user.username : null;
+      const { url, key } = await uploadVideoBuffer(buffer, mimetype, userId, username, {});
       res.json({ success: true, videoUrl: url, s3Key: key });
     } catch (err) {
       console.error('[UPLOAD-VIDEO] Error:', err);
@@ -242,14 +250,42 @@ router.post('/s3-multipart/abort', authMiddleware, async (req, res) => {
  * Body: { videoUrl (or s3Key), start, end }
  * Returns: { jobId, status }
  */
+const User = require('../models/User');
+
 router.post('/video/crop', authMiddleware, async (req, res) => {
   const { videoUrl, s3Key, start, end } = req.body;
   // Extract userId from authenticated user
   const userId = req.user && req.user._id ? req.user._id.toString() : null;
+  let username = req.user && req.user.username ? req.user.username : null;
+
+  // If username is missing, fetch from DB
+  if (!username && userId) {
+    try {
+      const userDoc = await User.findById(userId).select('username');
+      if (userDoc && userDoc.username) {
+        username = userDoc.username;
+      }
+    } catch (e) {
+      console.error('[VIDEO-CROP][API] Failed to fetch username from DB:', e);
+    }
+  }
+
   console.log('[VIDEO-CROP][API] Incoming crop request:', {
-    videoUrl, s3Key, start, end, userId,
+    videoUrl, s3Key, start, end, userId, username,
     reqUser: req.user
   });
+  
+  // Debug log to confirm username is present in crop job data
+  console.log('[VIDEO-CROP][API] Crop job data before creation:', {
+    type: 'crop',
+    videoUrl,
+    s3Key,
+    start,
+    end,
+    userId,
+    username
+  });
+  
   if ((!videoUrl && !s3Key) || typeof start !== 'number' || typeof end !== 'number') {
     return res.status(400).json({ error: 'Missing or invalid videoUrl/s3Key, start, or end' });
   }
@@ -263,7 +299,8 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
       s3Key,
       start,
       end,
-      userId
+      userId,
+      username
     });
     console.log(`[VIDEO-CROP][API] Created crop job:`, {
       jobId: job.jobId,
@@ -272,6 +309,7 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
       start: job.start,
       end: job.end,
       userId: job.userId,
+      username: job.username,
       status: job.status
     });
     res.json({ jobId: job.jobId, status: job.status });
