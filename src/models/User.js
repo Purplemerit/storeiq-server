@@ -27,7 +27,6 @@ const userSchema = new mongoose.Schema({
   timezone: { type: String, default: 'UTC' },
 });
 
-// Encrypt only token fields
 
 // Automatically update `updatedAt` on save
 userSchema.pre("save", function (next) {
