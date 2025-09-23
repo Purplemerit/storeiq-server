@@ -165,7 +165,33 @@ router.patch("/me", authMiddleware, async (req, res) => {
   }
 });
 /**
- * POST /api/auth/link-youtube
+ * PATCH /auth/password - update user password
+ * Requires: { currentPassword, newPassword }
+ */
+router.patch("/password", authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!isValidPassword(newPassword)) {
+      return res.status(400).json({ error: "New password must be at least 8 characters." });
+    }
+    const user = await User.findById(req.user._id);
+    if (!user || !user.password) {
+      return res.status(404).json({ error: "User not found or password not set." });
+    }
+    const match = await bcrypt.compare(currentPassword, user.password);
+    if (!match) {
+      return res.status(401).json({ error: "Current password is incorrect." });
+    }
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.updatedAt = new Date();
+    await user.save();
+    res.json({ message: "Password updated successfully." });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
  * Requires: { accessToken, refreshToken } in body
  * Stores tokens in logged-in user's record
  */

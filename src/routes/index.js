@@ -4,6 +4,7 @@ const aiRouter = require("./ai");
 const videoRouter = require("./video");
 const scriptHistoryRouter = require("./scriptHistory");
 
+const statsRouter = require("./stats");
 const router = express.Router();
 
 // Apply body parsers only to routers that need them (not videoRouter)
@@ -16,5 +17,7 @@ router.use("/", authRouter); // Expose /me at /api/me
 router.use("/", bodyParser(), urlencoded({ extended: true }), aiRouter);
 router.use("/", videoRouter); // No body parser for videoRouter (upload-video)
 router.use("/scripts", bodyParser(), urlencoded({ extended: true }), scriptHistoryRouter);
+
+router.use("/stats", statsRouter);
 
 module.exports = router;

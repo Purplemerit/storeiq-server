@@ -71,6 +71,8 @@ async function getUserVideos(req, res) {
           createdAt: v.createdAt,
           thumbnail: v.thumbnail || null,
           isEdited: v.isEdited || false,
+          publishCount: typeof v.publishCount === 'number' ? v.publishCount : 0,
+          publishedToYouTube: typeof v.publishedToYouTube === 'boolean' ? v.publishedToYouTube : false,
         }))
       : [];
     res.status(200).json(formatted);

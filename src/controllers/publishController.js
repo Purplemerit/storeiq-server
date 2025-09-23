@@ -2,6 +2,7 @@ const stream = require("stream");
 // Controller for publishing videos to YouTube and Instagram using stored tokens
 const User = require("../models/User");
 const s3Service = require("../s3Service");
+const Video = require("../models/Video");
 const { google } = require("googleapis");
 const axios = require("axios");
 
@@ -67,6 +68,28 @@ exports.publishToYouTube = async (req, res) => {
           body: media.body,
         },
       });
+
+      // --- YouTube publish tracking ---
+      try {
+        // Find or create the video document
+        let videoDoc = await Video.findOne({ s3Key: req.body.s3Key, owner: req.user._id });
+        if (!videoDoc) {
+          videoDoc = new Video({
+            s3Key: req.body.s3Key,
+            owner: req.user._id,
+            title: title || "Untitled Video",
+            description: description || ""
+          });
+        }
+        videoDoc.publishCount = (videoDoc.publishCount || 0) + 1;
+        videoDoc.publishedToYouTube = true;
+        await videoDoc.save();
+      } catch (trackErr) {
+        // Log but do not block response
+        console.error("Failed to update YouTube publish tracking:", trackErr);
+      }
+      // --- End YouTube publish tracking ---
+
       return res.json({ success: true, message: "Video posted to YouTube.", videoId: response.data.id });
     } catch (err) {
       return res.status(500).json({ error: "YouTube upload failed", details: err.message });
