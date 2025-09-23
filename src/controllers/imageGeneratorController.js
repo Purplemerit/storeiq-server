@@ -63,7 +63,7 @@ async function generateImage(req, res) {
     // Use uploadVideoBuffer for images as well (it handles buffer uploads)
     const userId = user.id || user._id;
     const username = user.username || userId;
-    const s3Result = await s3Service.uploadVideoBuffer(
+    const s3Result = await s3Service.uploadImageBuffer(
       imageBuffer,
       'image/png',
       userId,

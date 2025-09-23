@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('./authMiddleware');
 const ScriptHistory = require('../models/ScriptHistory');
-const { listUserVideosFromS3 } = require('../s3Service');
+const { listUserVideosFromS3, listUserImagesFromS3 } = require('../s3Service');
 const Video = require('../models/Video');
 
 // Helper: parse date or return undefined
@@ -36,12 +36,16 @@ router.get('/summary', authMiddleware, async (req, res) => {
     // For extensibility: add more aggregation if metadata contains stats
     // Count AI videos generated (from S3)
     let totalAIVideos = 0;
+    let totalAIImages = 0;
     try {
       const username = req.user && req.user.username ? req.user.username : '';
       const videos = await listUserVideosFromS3(userId, username);
+      const images = await listUserImagesFromS3(userId, username);
       totalAIVideos = Array.isArray(videos) ? videos.length : 0;
+      totalAIImages = Array.isArray(images) ? images.length : 0;
     } catch (e) {
       totalAIVideos = 0;
+      totalAIImages = 0;
     }
 
     // Count published videos for this user (publishedToYouTube true OR publishCount > 0)
@@ -59,6 +63,13 @@ router.get('/summary', authMiddleware, async (req, res) => {
         {
           title: "AI Videos Generated",
           value: totalAIVideos,
+          change: "0%",
+          changeType: "positive",
+          comparison: "vs previous"
+        },
+        {
+          title: "AI Images Generated",
+          value: totalAIImages,
           change: "0%",
           changeType: "positive",
           comparison: "vs previous"
@@ -125,25 +136,38 @@ router.get('/timeseries', authMiddleware, async (req, res) => {
 
         // 2. AI Videos generated per day (from S3)
         let aiVideoAgg = [];
+        let aiImageAgg = [];
         try {
           const username = req.user && req.user.username ? req.user.username : '';
           const s3Videos = await listUserVideosFromS3(userId, username);
+          const s3Images = await listUserImagesFromS3(userId, username);
     
-          // Group by day
+          // Group by day for videos
           const aiVideoMap = {};
           s3Videos.forEach(v => {
-            // Use v.createdAt or v.CreationDate or v.LastModified (depending on S3 object structure)
             let dateObj = v.createdAt ? new Date(v.createdAt) : (v.CreationDate ? new Date(v.CreationDate) : (v.LastModified ? new Date(v.LastModified) : null));
             if (!dateObj || isNaN(dateObj.getTime())) return;
-            // Filter by date range if provided
             if ((start && dateObj < start) || (end && dateObj > end)) return;
             const dateStr = dateObj.toISOString().slice(0, 10);
             aiVideoMap[dateStr] = (aiVideoMap[dateStr] || 0) + 1;
           });
           aiVideoAgg = Object.entries(aiVideoMap).map(([date, count]) => ({ _id: date, count }));
           aiVideoAgg.sort((a, b) => a._id.localeCompare(b._id));
+
+          // Group by day for images
+          const aiImageMap = {};
+          s3Images.forEach(img => {
+            let dateObj = img.createdAt ? new Date(img.createdAt) : (img.CreationDate ? new Date(img.CreationDate) : (img.LastModified ? new Date(img.LastModified) : null));
+            if (!dateObj || isNaN(dateObj.getTime())) return;
+            if ((start && dateObj < start) || (end && dateObj > end)) return;
+            const dateStr = dateObj.toISOString().slice(0, 10);
+            aiImageMap[dateStr] = (aiImageMap[dateStr] || 0) + 1;
+          });
+          aiImageAgg = Object.entries(aiImageMap).map(([date, count]) => ({ _id: date, count }));
+          aiImageAgg.sort((a, b) => a._id.localeCompare(b._id));
         } catch (e) {
           aiVideoAgg = [];
+          aiImageAgg = [];
         }
 
     // 3. Published videos per day
@@ -162,18 +186,21 @@ router.get('/timeseries', authMiddleware, async (req, res) => {
         const dateSet = new Set();
         scriptAgg.forEach(d => dateSet.add(d._id));
         aiVideoAgg.forEach(d => dateSet.add(d._id));
+        aiImageAgg.forEach(d => dateSet.add(d._id));
         publishedAgg.forEach(d => dateSet.add(d._id));
         const allDates = Array.from(dateSet).sort();
 
         // Build date -> count maps
         const scriptMap = Object.fromEntries(scriptAgg.map(d => [d._id, d.count]));
         const aiVideoMap = Object.fromEntries(aiVideoAgg.map(d => [d._id, d.count]));
+        const aiImageMap = Object.fromEntries(aiImageAgg.map(d => [d._id, d.count]));
         const publishedMap = Object.fromEntries(publishedAgg.map(d => [d._id, d.count]));
 
         // Fill missing dates with zeroes
         const data = allDates.map(date => ({
           date,
           aiVideosGeneratedCount: aiVideoMap[date] || 0,
+          aiImagesGeneratedCount: aiImageMap[date] || 0,
           scriptGeneratedCount: scriptMap[date] || 0,
           publishedCount: publishedMap[date] || 0
         }));
