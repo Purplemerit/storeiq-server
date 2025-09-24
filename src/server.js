@@ -8,6 +8,7 @@ const youtubeRoutes = require('./youtube/youtubeRoutes');
 const videoTTSRoutes = require("../src/ai-tools/text-audio");
 const videoMountingRoutes = require("../src/ai-tools/videoMounting");
 const uploadAudioRoutes = require("./ai-tools/uploadAudio");
+const instagramRoutes = require("../src/instagramconnect/instagram");
 // Strategies
 require("./googleauth/googlestrategy");
 require("./githubauth/githubStrategy");
@@ -72,6 +73,7 @@ app.use("/video-tts", videoTTSRoutes);
 app.use('/youtube', youtubeRoutes);
 app.use("/api/video", videoMountingRoutes);
 app.use("/api", uploadAudioRoutes);
+app.use("/api", instagramRoutes);
 // Basic route
 app.get("/", (req, res) => {
   res.send("Backend server is running 🚀");
