@@ -4,6 +4,7 @@ const { generateVideo } = require('../geminiService');
 const { getUserVideos } = require('../controllers/aiController');
 const authMiddleware = require('./authMiddleware');
 const multer = require('multer');
+const { listUserImagesFromS3 } = require('../s3Service');
 
 const router = express.Router();
 const {
@@ -138,6 +139,21 @@ router.use('/upload-video', (err, req, res, next) => {
  * Returns all videos for a user.
  */
 router.get('/videos', authMiddleware, getUserVideos);
+
+// GET /api/images - List all images for the authenticated user
+router.get('/images', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user && req.user._id ? req.user._id.toString() : null;
+    const username = req.user && req.user.username ? req.user.username : null;
+    if (!userId) {
+      return res.status(401).json({ error: 'User authentication required' });
+    }
+    const images = await listUserImagesFromS3(userId, username);
+    res.json(Array.isArray(images) ? images : []);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to fetch images' });
+  }
+});
 
 /**
  * POST /api/s3-presigned-url

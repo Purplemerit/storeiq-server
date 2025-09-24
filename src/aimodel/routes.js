@@ -45,20 +45,6 @@ router.post("/generate-video", verifyJWT, async (req, res) => {
       s3Key = key;
     }
 
-    // 🔽 Save metadata (don’t break if DB fails)
-    // try {
-    //   if (GeneratedVideo) {
-    //     await GeneratedVideo.create({
-    //       user: userId,
-    //       prompt,
-    //       url: s3Url || videoUrl, // prefer S3
-    //       output: typeof output === "string" ? output : JSON.stringify(output),
-    //     });
-    //   }
-    // } catch (saveErr) {
-    //   console.error("[/ai/generate-video] Failed to save GeneratedVideo:", saveErr);
-    // }
-
     return res.json({
       success: true,
       s3Url,
@@ -70,5 +56,7 @@ router.post("/generate-video", verifyJWT, async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
+const { generateImage } = require("../controllers/imageGeneratorController");
+router.post("/generate-image", verifyJWT, generateImage);
 
 module.exports = router;

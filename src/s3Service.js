@@ -154,6 +154,45 @@ async function uploadVideoBuffer(buffer, mimetype, userId, username, metadata = 
   }
 }
 
+//
+// Upload image buffer to S3 in images/{username}/image-... path
+//
+async function uploadImageBuffer(buffer, mimetype, userId, username, metadata = {}) {
+  if (!userId) {
+    throw new Error('userId is required for image upload');
+  }
+  const safeUsername = (username && typeof username === "string" && username.trim().length > 0)
+    ? username.trim()
+    : userId;
+  try {
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(6).toString('hex');
+    // Use extension from mimetype if possible, fallback to .png
+    let ext = 'png';
+    if (mimetype && mimetype.split('/')[1]) {
+      ext = mimetype.split('/')[1];
+    }
+    const key = `images/${safeUsername}/image-${timestamp}-${random}.${ext}`;
+    console.log('[S3][UPLOAD][IMAGE] userId:', userId, 'username:', username, 'key:', key);
+
+    const command = new PutObjectCommand({
+      Bucket: AWS_BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: mimetype || 'image/png',
+      Metadata: { ...metadata, userid: userId },
+    });
+
+    await s3.send(command);
+
+    const url = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+    console.log('[S3][UPLOAD][IMAGE] Uploaded to:', url);
+    return { url, key };
+  } catch (err) {
+    throw new Error('Failed to upload image to S3');
+  }
+}
+
 /**
  * Deletes a video from S3 by key.
  * @param {string} key - The S3 object key to delete.
@@ -230,6 +269,43 @@ async function listUserVideosFromS3(userId, username) {
   } catch (err) {
     console.error('[S3] Error listing user videos:', err);
     throw new Error('Failed to list user videos from S3');
+  }
+}
+
+/**
+ * Lists all images for a user from S3.
+ * @param {string} userId
+ * @param {string} username
+ * @returns {Promise<Array>} Array of image metadata objects
+ */
+async function listUserImagesFromS3(userId, username) {
+  if (!userId) throw new Error('userId is required');
+  const safeUsername = (username && typeof username === "string" && username.trim().length > 0)
+    ? username.trim()
+    : userId;
+  // Images are stored with a prefix per username, e.g. "images/{username}/"
+  const prefix = `images/${safeUsername}/`;
+  const command = new ListObjectsV2Command({
+    Bucket: AWS_BUCKET_NAME,
+    Prefix: prefix,
+  });
+  try {
+    const data = await s3.send(command);
+    if (!data.Contents) {
+      return [];
+    }
+    // Map image objects
+    const mapped = data.Contents.map((obj) => ({
+      key: obj.Key,
+      s3Url: `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${obj.Key}`,
+      title: obj.Key.split('/').pop(),
+      createdAt: obj.LastModified,
+      size: obj.Size,
+    }));
+    return mapped;
+  } catch (err) {
+    console.error('[S3] Error listing user images:', err);
+    throw new Error('Failed to list user images from S3');
   }
 }
 
@@ -387,8 +463,10 @@ function streamToBuffer(stream) {
 module.exports = {
   uploadVideoBase64,
   uploadVideoBuffer,
+  uploadImageBuffer,
   deleteVideoFromS3,
   listUserVideosFromS3,
+  listUserImagesFromS3,
   generatePresignedUrl,
   initiateMultipartUpload,
   generateMultipartPresignedUrls,
