@@ -341,7 +341,7 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
  */
 router.get('/video/crop/:job_id', async (req, res) => {
   const { job_id } = req.params;
-  const job = getJob(job_id);
+  const job = await getJob(job_id);
   if (!job) {
     return res.status(404).json({ error: 'Job not found' });
   }
@@ -349,7 +349,8 @@ router.get('/video/crop/:job_id', async (req, res) => {
     jobId: job.jobId,
     status: job.status,
     error: job.error,
-    downloadUrl: job.downloadUrl
+    downloadUrl: job.downloadUrl,
+    key: job.key || job.s3Key || null
   });
 });
 

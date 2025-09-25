@@ -100,7 +100,12 @@ async function processCropJob(job) {
     const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId, username, { edited: "true" });
     console.log(`[VIDEO-CROP][WORKER][UPLOAD] S3 upload result:`, { url, key });
     try {
-      await updateJob(String(job.jobId), { status: 'completed', downloadUrl: url, error: null });
+      const updatedJob = await updateJob(String(job.jobId), { status: 'completed', downloadUrl: url, s3Key: key, error: null });
+      if (!updatedJob) {
+        console.warn(`[VIDEO-CROP][WORKER][ERROR] updateJob did not update any document for jobId: ${job.jobId}`);
+      } else {
+        console.log(`[VIDEO-CROP][WORKER][SUCCESS] Updated job:`, updatedJob);
+      }
     } catch (e) {
       console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to completed:', e);
     }
