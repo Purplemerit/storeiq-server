@@ -309,7 +309,7 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
     return res.status(401).json({ error: 'User authentication required' });
   }
   try {
-    const job = createJob({
+    const job = await createJob({
       type: 'crop',
       videoUrl,
       s3Key,

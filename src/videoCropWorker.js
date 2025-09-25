@@ -1,6 +1,7 @@
 // Video crop worker: polls for pending crop jobs, processes them with ffmpeg, uploads to S3, updates job status
 require('dotenv').config({ path: __dirname + '/../.env' });
 
+const mongoose = require('mongoose');
 const { getPendingJobs, updateJob } = require('./videoEditJob');
 const { uploadVideoBuffer } = require('./s3Service');
 const fs = require('fs');
@@ -40,7 +41,11 @@ function cropWithFfmpeg(inputPath, outputPath, start, end) {
 async function processCropJob(job) {
   let inputPath, cleanupInput = false;
   if (!job.userId) {
-    updateJob(job.jobId, { status: 'failed', error: 'userId is required for export' });
+    try {
+      await updateJob(String(job.jobId), { status: 'failed', error: 'userId is required for export' });
+    } catch (e) {
+      console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to failed:', e);
+    }
     throw new Error('userId is required for export and must be present in crop job');
   }
   console.log(`[VIDEO-CROP][WORKER] Processing crop job:`, {
@@ -61,7 +66,11 @@ async function processCropJob(job) {
       if (!fs.existsSync(inputPath)) {
         const errMsg = `[VIDEO-CROP][WORKER] Input file missing after download: ${inputPath}`;
         console.error(errMsg);
-        updateJob(job.jobId, { status: 'failed', error: 'Input file missing after download' });
+        try {
+          await updateJob(String(job.jobId), { status: 'failed', error: 'Input file missing after download' });
+        } catch (e) {
+          console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to failed:', e);
+        }
         return;
       }
     } else if (job.s3Key) {
@@ -79,14 +88,22 @@ async function processCropJob(job) {
     if (!job.username || typeof job.username !== "string" || job.username.trim().length === 0) {
       const errMsg = `[VIDEO-CROP][WORKER][ERROR] job.username is missing or empty for jobId: ${job.jobId}`;
       console.error(errMsg);
-      updateJob(job.jobId, { status: 'failed', error: 'username is required for S3 upload' });
+      try {
+        await updateJob(String(job.jobId), { status: 'failed', error: 'username is required for S3 upload' });
+      } catch (e) {
+        console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to failed:', e);
+      }
       throw new Error('username is required for S3 upload and must be present in crop job');
     }
     const username = job.username.trim();
     console.log(`[VIDEO-CROP][WORKER][UPLOAD] About to upload. userId:`, job.userId, 'username:', username, 'typeof:', typeof job.userId);
     const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId, username, { edited: "true" });
     console.log(`[VIDEO-CROP][WORKER][UPLOAD] S3 upload result:`, { url, key });
-    updateJob(job.jobId, { status: 'completed', downloadUrl: url, error: null });
+    try {
+      await updateJob(String(job.jobId), { status: 'completed', downloadUrl: url, error: null });
+    } catch (e) {
+      console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to completed:', e);
+    }
     console.log(`[VIDEO-CROP][WORKER] Completed crop job:`, {
       jobId: job.jobId,
       downloadUrl: url
@@ -94,7 +111,11 @@ async function processCropJob(job) {
     fs.unlinkSync(outputPath);
     if (cleanupInput) fs.unlinkSync(inputPath);
   } catch (err) {
-    updateJob(job.jobId, { status: 'failed', error: err.message });
+    try {
+      await updateJob(String(job.jobId), { status: 'failed', error: err.message });
+    } catch (e) {
+      console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to failed:', e);
+    }
     console.error(`[VIDEO-CROP][WORKER] Failed crop job:`, {
       jobId: job.jobId,
       error: err.message
@@ -104,7 +125,14 @@ async function processCropJob(job) {
 }
 
 async function pollAndProcess() {
-  const jobs = getPendingJobs('crop');
+  let jobs;
+  try {
+    jobs = await getPendingJobs('crop');
+    if (!Array.isArray(jobs)) jobs = [];
+  } catch (err) {
+    console.error('[VIDEO-CROP][WORKER] Failed to fetch pending jobs:', err);
+    jobs = [];
+  }
   if (jobs.length > 0) {
     console.log(`[VIDEO-CROP][WORKER] Found ${jobs.length} pending crop job(s)`);
     jobs.forEach(j => {
@@ -120,13 +148,32 @@ async function pollAndProcess() {
     });
   }
   for (const job of jobs) {
-    updateJob(job.jobId, { status: 'processing' });
+    try {
+      await updateJob(String(job.jobId), { status: 'processing' });
+    } catch (e) {
+      console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to processing:', e);
+    }
     console.log(`[VIDEO-CROP][WORKER] Set job to processing:`, { jobId: job.jobId });
     await processCropJob(job);
   }
 }
 
-// Poll every 10 seconds
-setInterval(pollAndProcess, 10000);
+// Ensure mongoose connection before polling
+async function startWorker() {
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/storeiq';
+  try {
+    await mongoose.connect(mongoUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('[VIDEO-CROP][WORKER] Mongoose connected. Starting polling.');
+    setInterval(pollAndProcess, 10000);
+  } catch (err) {
+    console.error('[VIDEO-CROP][WORKER] Failed to connect to MongoDB:', err);
+    process.exit(1);
+  }
+}
+
+startWorker();
 
 module.exports = { pollAndProcess };
