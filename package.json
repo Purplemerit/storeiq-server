@@ -15,9 +15,12 @@
     "@aws-sdk/client-s3": "^3.888.0",
     "@aws-sdk/s3-request-presigner": "^3.890.0",
     "@elevenlabs/elevenlabs-js": "^2.15.0",
+    "@google/genai": "^1.20.0",
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "bytez.js": "^1.1.16",
+    "cloudinary": "^2.7.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
@@ -38,7 +41,8 @@
     "passport-facebook": "^3.0.0",
     "passport-github2": "^0.1.12",
     "passport-google-oauth20": "^2.0.0",
-    "sharp": "^0.34.4"
+    "sharp": "^0.34.4",
+    "streamifier": "^0.1.1"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
