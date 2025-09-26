@@ -65,6 +65,11 @@ class MongoJobStore {
     const jobs = await JobModel.find(query);
     return jobs.map(j => j.toObject());
   }
+  async deleteJobByS3Key(s3Key) {
+    if (!s3Key) return null;
+    const result = await JobModel.deleteOne({ s3Key });
+    return result.deletedCount;
+  }
 }
 
 const jobStore = new MongoJobStore();
@@ -74,5 +79,6 @@ module.exports = {
   updateJob: jobStore.updateJob.bind(jobStore),
   getJob: jobStore.getJob.bind(jobStore),
   getAllJobs: jobStore.getAllJobs.bind(jobStore),
-  getPendingJobs: jobStore.getPendingJobs.bind(jobStore)
+  getPendingJobs: jobStore.getPendingJobs.bind(jobStore),
+  deleteJobByS3Key: jobStore.deleteJobByS3Key.bind(jobStore)
 };

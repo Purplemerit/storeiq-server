@@ -7,7 +7,8 @@ const {
   updateJob,
   getJob,
   getAllJobs,
-  getPendingJobs
+  getPendingJobs,
+  deleteJobByS3Key
 } = require('./JobStore');
 
 module.exports = {
@@ -15,5 +16,6 @@ module.exports = {
   updateJob,
   getJob,
   getAllJobs,
-  getPendingJobs
+  getPendingJobs,
+  deleteJobByS3Key
 };

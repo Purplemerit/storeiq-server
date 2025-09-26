@@ -37,6 +37,15 @@ router.delete('/delete-video', authMiddleware, async (req, res) => {
   }
   try {
     await deleteVideoFromS3(s3Key);
+
+    // Also delete the videoEditJob from MongoDB
+    try {
+      const { deleteJobByS3Key } = require('../videoEditJob');
+      await deleteJobByS3Key(s3Key);
+    } catch (err) {
+      console.error('[DELETE-VIDEO] Error deleting videoEditJob:', err);
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error('[DELETE-VIDEO] Error deleting from S3:', err);
