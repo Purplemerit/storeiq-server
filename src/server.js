@@ -58,7 +58,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // frontend URL, e.g. http://localhost:3000
+    origin: process.env.FRONTEND_URL|| "*", // frontend URL, e.g. http://localhost:3000
     credentials: true, // allow cookies to be sent
   })
 );
@@ -95,11 +95,12 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("Connected to MongoDB");
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+    // app.listen(PORT, () => {
+    //   console.log(`Server running on http://localhost:${PORT}`);
+    // });
   })
   .catch((err) => {
     console.error("Failed to connect to MongoDB:", err);
     process.exit(1);
   });
+  module.exports = app
