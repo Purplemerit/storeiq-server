@@ -60,7 +60,7 @@ router.get(
       maxAge: 24 * 60 * 60 * 1000,
     });
 
-    res.redirect(`${FRONTEND_URL}/dashboard`);
+    res.redirect(`${FRONTEND_URL}/dashboard?logged_in=1`);
   }
 );
 
