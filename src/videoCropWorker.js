@@ -22,16 +22,62 @@ async function downloadToFile(url, dest) {
   });
 }
 
-function cropWithFfmpeg(inputPath, outputPath, start, end) {
+async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
+  const baseArgs = [
+    '-y',
+    '-ss', String(start),
+    '-i', inputPath,
+    '-to', String(end)
+  ];
+  let filter = null;
+
+  if (aspectRatio) {
+    // Probe video dimensions
+    const probe = await new Promise((resolve, reject) => {
+      execFile('ffprobe', [
+        '-v', 'error',
+        '-select_streams', 'v:0',
+        '-show_entries', 'stream=width,height',
+        '-of', 'json',
+        inputPath
+      ], (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        try {
+          resolve(JSON.parse(stdout));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    const { width, height } = probe.streams[0];
+    const [wRatio, hRatio] = aspectRatio.split(':').map(Number);
+    const targetRatio = wRatio / hRatio;
+    const inputRatio = width / height;
+
+    if (Math.abs(inputRatio - targetRatio) < 0.01) {
+      // Already matches, no filter needed
+      filter = null;
+    } else if (inputRatio > targetRatio) {
+      // Crop width
+      const cropWidth = Math.round(height * targetRatio);
+      filter = `crop=${cropWidth}:${height}`;
+    } else {
+      // Crop height
+      const cropHeight = Math.round(width / targetRatio);
+      filter = `crop=${width}:${cropHeight}`;
+    }
+  }
+
   return new Promise((resolve, reject) => {
-    execFile('ffmpeg', [
-      '-y',
-      '-ss', String(start),
-      '-i', inputPath,
-      '-to', String(end),
-      '-c', 'copy',
-      outputPath
-    ], (err, stdout, stderr) => {
+    const args = [...baseArgs];
+    if (filter) {
+      args.push('-vf', filter);
+      args.push('-c:v', 'libx264', '-c:a', 'copy');
+    } else {
+      args.push('-c', 'copy');
+    }
+    args.push(outputPath);
+    execFile('ffmpeg', args, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr || err.message));
       resolve();
     });
@@ -80,7 +126,7 @@ async function processCropJob(job) {
       throw new Error('No videoUrl or s3Key');
     }
     const outputPath = path.join(TMP_DIR, `output_${job.jobId}.mp4`);
-    await cropWithFfmpeg(inputPath, outputPath, job.start, job.end);
+    await cropWithFfmpeg(inputPath, outputPath, job.start, job.end, job.aspectRatio);
 
     // Upload cropped video to S3
     const buffer = fs.readFileSync(outputPath);
