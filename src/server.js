@@ -11,6 +11,7 @@ const uploadAudioRoutes = require("./ai-tools/uploadAudio");
 const instagramRoutes = require("../src/instagramconnect/instagram");
 
 
+const bytezRoutes = require("../src/aimodel/routes");
 const aimobRoutes = require("../src/ai-tools/mobtool");
 // Strategies
 require("./googleauth/googlestrategy");
@@ -79,6 +80,7 @@ app.use("/api", instagramRoutes);
 
 
 app.use("/api", aimobRoutes);
+app.use("/api/bytez", bytezRoutes);
 // Basic route
 app.get("/", (req, res) => {
   res.send("Backend server is running 🚀");
