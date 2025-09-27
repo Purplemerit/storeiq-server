@@ -9,6 +9,9 @@ const videoTTSRoutes = require("../src/ai-tools/text-audio");
 const videoMountingRoutes = require("../src/ai-tools/videoMounting");
 const uploadAudioRoutes = require("./ai-tools/uploadAudio");
 const instagramRoutes = require("../src/instagramconnect/instagram");
+
+
+const aimobRoutes = require("../src/ai-tools/mobtool");
 // Strategies
 require("./googleauth/googlestrategy");
 require("./githubauth/githubStrategy");
@@ -55,7 +58,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // frontend URL, e.g. http://localhost:3000
+    origin: process.env.FRONTEND_URL|| "*", // frontend URL, e.g. http://localhost:3000
     credentials: true, // allow cookies to be sent
   })
 );
@@ -73,6 +76,9 @@ app.use('/youtube', youtubeRoutes);
 app.use("/api/video", videoMountingRoutes);
 app.use("/api", uploadAudioRoutes);
 app.use("/api", instagramRoutes);
+
+
+app.use("/api", aimobRoutes);
 // Basic route
 app.get("/", (req, res) => {
   res.send("Backend server is running 🚀");
@@ -96,3 +102,4 @@ mongoose
     console.error("Failed to connect to MongoDB:", err);
     process.exit(1);
   });
+ 

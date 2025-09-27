@@ -460,7 +460,55 @@ function streamToBuffer(stream) {
   });
 }
 
+
+/**
+ * Uploads an audio buffer to S3 and returns the public URL and key.
+ * @param {Buffer} buffer - Audio file buffer.
+ * @param {string} mimetype - MIME type of the audio (e.g., "audio/mpeg", "audio/wav").
+ * @param {string} userId - MongoDB ObjectId of the authenticated user.
+ * @param {string} username - Username (optional, falls back to userId).
+ * @param {object} metadata - Additional metadata.
+ * @returns {Promise<{ url: string, key: string }>}
+ */
+async function uploadAudioBuffer(buffer, mimetype, userId, username, metadata = {}) {
+  if (!userId) {
+    throw new Error('userId is required for audio upload');
+  }
+  const safeUsername = (username && typeof username === "string" && username.trim().length > 0)
+    ? username.trim()
+    : userId;
+  try {
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(6).toString('hex');
+    // Default to .mp3 if not specified
+    let ext = 'mp3';
+    if (mimetype && mimetype.split('/')[1]) {
+      ext = mimetype.split('/')[1];
+    }
+    const key = `audios/${safeUsername}/audio-${timestamp}-${random}.${ext}`;
+    console.log('[S3][UPLOAD][AUDIO] userId:', userId, 'username:', username, 'key:', key);
+
+    const command = new PutObjectCommand({
+      Bucket: AWS_BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: mimetype || 'audio/mpeg',
+      Metadata: { ...metadata, userid: userId },
+    });
+
+    await s3.send(command);
+
+    const url = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+    console.log('[S3][UPLOAD][AUDIO] Uploaded to:', url);
+    return { url, key };
+  } catch (err) {
+    console.error('[S3][UPLOAD][AUDIO] Failed:', err);
+    throw new Error('Failed to upload audio to S3');
+  }
+}
+
 module.exports = {
+   uploadAudioBuffer, 
   uploadVideoBase64,
   uploadVideoBuffer,
   uploadImageBuffer,
