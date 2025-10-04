@@ -28,7 +28,10 @@ const app = express();
 // CORS configuration
 app.use(
  cors({
-   origin: "http://localhost:5173",
+   origin: [
+     "http://localhost:5173",
+     "https://store-iq-client.vercel.app"
+   ],
    credentials: true,
    allowedHeaders: [
      "Origin",
@@ -59,7 +62,10 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL|| "*", // frontend URL, e.g. http://localhost:3000
+    origin: [
+      "http://localhost:5173",
+      "https://store-iq-client.vercel.app"
+    ],
     credentials: true, // allow cookies to be sent
   })
 );
