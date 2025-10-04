@@ -26,7 +26,7 @@ router.get("/auth/instagram/callback", async (req, res) => {
     });
 
     const accessToken = tokenRes.data.access_token;
-    res.cookie("fb_token", accessToken, { httpOnly: true });
+    res.cookie("fb_token", accessToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: process.env.NODE_ENV === "production" ? "none" : "lax" });
     res.send("✅ Instagram connected successfully!");
   } catch (err) {
     console.error(err.response?.data || err.message);
