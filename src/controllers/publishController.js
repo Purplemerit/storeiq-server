@@ -7,14 +7,21 @@ const { google } = require("googleapis");
 const axios = require("axios");
 const schedulingService = require("../services/schedulingService");
 
+// Export the publishVideoToYouTube function for use by other modules
+exports.publishVideoToYouTube = publishVideoToYouTube;
+
 // Utility function to publish video to YouTube
 async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
+  console.log(`[publishVideoToYouTube] Starting upload for user ${userId}, s3Key: ${s3Key}`);
+  
   const user = await User.findById(userId).select("+googleAccessToken");
   let googleAccessToken = user && user.googleAccessToken;
   
   if (!googleAccessToken && user && typeof user.get === "function") {
+    console.log('[publishVideoToYouTube] Attempting to get raw token...');
     const rawToken = user.get("googleAccessToken", null, { getters: false });
     if (rawToken) {
+      console.log('[publishVideoToYouTube] Found raw token');
       googleAccessToken = rawToken;
     }
   }
@@ -30,10 +37,13 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
   }
 
   if (!user || !googleAccessToken) {
+    console.error('[publishVideoToYouTube] No user or access token found');
     throw new Error("YouTube account not linked.");
   }
 
+  console.log('[publishVideoToYouTube] Fetching video from S3...');
   const videoBuffer = await s3Service.getFileBuffer(s3Key);
+  console.log('[publishVideoToYouTube] Video fetched successfully');
   const { OAuth2 } = google.auth;
   const oauth2Client = new OAuth2();
   oauth2Client.setCredentials({ access_token: googleAccessToken });
@@ -60,6 +70,7 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
     },
   };
 
+  console.log('[publishVideoToYouTube] Initiating YouTube upload...');
   const response = await youtube.videos.insert({
     part: "snippet,status",
     requestBody,
@@ -67,8 +78,10 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
       body: media.body,
     },
   });
+  console.log('[publishVideoToYouTube] Upload successful, video ID:', response.data.id);
 
   // Update video tracking
+  console.log('[publishVideoToYouTube] Updating video tracking...');
   let videoDoc = await Video.findOne({ s3Key, owner: userId });
   if (!videoDoc) {
     videoDoc = new Video({

@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const scheduledPostSchema = new mongoose.Schema({
   userId: { 
-    type: String, 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User',
     required: true 
   },
   videoS3Key: { 
@@ -28,7 +29,7 @@ const scheduledPostSchema = new mongoose.Schema({
     default: 'pending' 
   },
   error: String,
-  publishedVideoId: String // YouTube video ID after successful publishing
+  publishedVideoId: String
 }, { 
   timestamps: true 
 });

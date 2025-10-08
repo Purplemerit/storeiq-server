@@ -1,6 +1,7 @@
-const mongoose = require('mongoose');
 const ScheduledPost = require('../models/ScheduledPost');
 const User = require('../models/User');
+const mongoose = require('mongoose');
+const publishController = require('../controllers/publishController');
 
 class ValidationError extends Error {
   constructor(message) {
@@ -11,13 +12,8 @@ class ValidationError extends Error {
 
 class SchedulingService {
   async validateSchedulingRequest(userId, videoS3Key, scheduledTime) {
-    // Ensure userId is a valid ObjectId
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw new ValidationError('Invalid user ID format');
-    }
-
     // Validate user exists and has YouTube connection
-    const user = await User.findById(userId).select('+googleAccessToken');
+    const user = await User.findById(userId).select('+googleAccessToken +_id');
     if (!user) {
       throw new ValidationError('User not found');
     }
@@ -109,32 +105,49 @@ class SchedulingService {
 
   async processScheduledPosts() {
     try {
+      console.log("Processing scheduled posts...");
       const now = new Date();
+      // Find posts to process and include user data
       const postsToProcess = await ScheduledPost.find({
         scheduledTime: { $lte: now },
         status: 'pending'
-      }).limit(10); // Process in batches
+      }).populate('userId', '_id googleAccessToken').limit(10);
+
+      console.log(`Found ${postsToProcess.length} posts to process`);
 
       for (const post of postsToProcess) {
         try {
-          // Double-check YouTube connection before publishing
-          const user = await User.findById(post.userId).select('+googleAccessToken');
-          if (!user || !user.googleAccessToken) {
-            throw new Error('YouTube account not connected');
+          console.log(`Processing post ${post._id}`);
+          
+          if (!post.userId || !post.userId.googleAccessToken) {
+            console.error(`User ${post.userId?._id} not found or no YouTube connection`);
+            await ScheduledPost.findByIdAndUpdate(post._id, {
+              status: 'failed',
+              error: 'YouTube account not connected'
+            });
+            continue;
           }
 
-          // Here we would typically call youtubeService.uploadVideo
-          // For now, just mark as completed
-          post.status = 'completed';
-          await post.save();
+          // Attempt to publish to YouTube
+          console.log(`Publishing video ${post.videoS3Key} to YouTube for user ${post.userId._id}...`);
+          const videoId = await publishController.publishVideoToYouTube(
+            post.userId._id.toString(),
+            post.videoS3Key,
+            { title: post.title, description: post.description }
+          );
+          
+          await ScheduledPost.findByIdAndUpdate(post._id, {
+            status: 'completed',
+            publishedVideoId: videoId
+          });
 
           console.log(`Successfully processed scheduled post ${post._id}`);
         } catch (error) {
-          post.status = 'failed';
-          post.error = error.message;
-          await post.save();
-
-          console.error(`Failed to process scheduled post ${post._id}:`, error.message);
+          console.error(`Error processing post ${post._id}:`, error);
+          await ScheduledPost.findByIdAndUpdate(post._id, {
+            status: 'failed',
+            error: error.message
+          });
         }
       }
     } catch (error) {
@@ -142,14 +155,21 @@ class SchedulingService {
     }
   }
 
-  // Ensure the processing job runs every minute
+  // Ensure the processing job runs frequently
   ensureProcessingJob() {
     if (!global.schedulingInterval) {
+      console.log('Starting scheduling interval...');
+      // Initial run
+      this.processScheduledPosts().catch(error => {
+        console.error('Initial scheduling run error:', error);
+      });
+
+      // Set up interval
       global.schedulingInterval = setInterval(() => {
         this.processScheduledPosts().catch(error => {
           console.error('Scheduling interval error:', error);
         });
-      }, 60000); // Run every minute
+      }, 30000); // Run every 30 seconds for more frequent checks
     }
   }
 }
