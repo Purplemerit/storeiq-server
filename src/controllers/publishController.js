@@ -5,6 +5,85 @@ const s3Service = require("../s3Service");
 const Video = require("../models/Video");
 const { google } = require("googleapis");
 const axios = require("axios");
+const schedulingService = require("../services/schedulingService");
+
+// Utility function to publish video to YouTube
+async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
+  const user = await User.findById(userId).select("+googleAccessToken");
+  let googleAccessToken = user && user.googleAccessToken;
+  
+  if (!googleAccessToken && user && typeof user.get === "function") {
+    const rawToken = user.get("googleAccessToken", null, { getters: false });
+    if (rawToken) {
+      googleAccessToken = rawToken;
+    }
+  }
+
+  if (!googleAccessToken && user) {
+    const mongoose = require("mongoose");
+    const nativeUser = await mongoose.connection.db
+      .collection("users")
+      .findOne({ _id: user._id }, { projection: { googleAccessToken: 1 } });
+    if (nativeUser && nativeUser.googleAccessToken) {
+      googleAccessToken = nativeUser.googleAccessToken;
+    }
+  }
+
+  if (!user || !googleAccessToken) {
+    throw new Error("YouTube account not linked.");
+  }
+
+  const videoBuffer = await s3Service.getFileBuffer(s3Key);
+  const { OAuth2 } = google.auth;
+  const oauth2Client = new OAuth2();
+  oauth2Client.setCredentials({ access_token: googleAccessToken });
+  
+  const youtube = google.youtube({
+    version: "v3",
+    auth: oauth2Client,
+  });
+
+  const { title, description } = metadata;
+  const media = {
+    body: Buffer.isBuffer(videoBuffer)
+      ? stream.Readable.from(videoBuffer)
+      : stream.Readable.from(Buffer.from(videoBuffer)),
+  };
+
+  const requestBody = {
+    snippet: {
+      title: title || "Untitled Video",
+      description: description || "",
+    },
+    status: {
+      privacyStatus: "private",
+    },
+  };
+
+  const response = await youtube.videos.insert({
+    part: "snippet,status",
+    requestBody,
+    media: {
+      body: media.body,
+    },
+  });
+
+  // Update video tracking
+  let videoDoc = await Video.findOne({ s3Key, owner: userId });
+  if (!videoDoc) {
+    videoDoc = new Video({
+      s3Key,
+      owner: userId,
+      title: title || "Untitled Video",
+      description: description || ""
+    });
+  }
+  videoDoc.publishCount = (videoDoc.publishCount || 0) + 1;
+  videoDoc.publishedToYouTube = true;
+  await videoDoc.save();
+
+  return response.data.id;
+}
 
 // POST /api/publish/youtube
 exports.publishToYouTube = async (req, res) => {
@@ -15,85 +94,29 @@ exports.publishToYouTube = async (req, res) => {
     if (!req.body.s3Key || typeof req.body.s3Key !== "string" || !req.body.s3Key.startsWith(expectedPrefix)) {
       return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
     }
-    const user = await User.findById(req.user._id).select("+googleAccessToken");
-    let googleAccessToken = user && user.googleAccessToken;
-    if (!googleAccessToken && user && typeof user.get === "function") {
-      const rawToken = user.get("googleAccessToken", null, { getters: false });
-      if (rawToken) {
-        googleAccessToken = rawToken;
-      }
-    }
-    if (!googleAccessToken && user) {
-      const mongoose = require("mongoose");
-      const nativeUser = await mongoose.connection.db
-        .collection("users")
-        .findOne({ _id: user._id }, { projection: { googleAccessToken: 1 } });
-      if (nativeUser && nativeUser.googleAccessToken) {
-        googleAccessToken = nativeUser.googleAccessToken;
-      }
-    }
-    if (!user || !googleAccessToken) {
-      return res.status(401).json({ error: "YouTube account not linked." });
-    }
-    // Fetch video file from S3 (filename in req.body.s3Key)
-    const videoBuffer = await s3Service.getFileBuffer(req.body.s3Key);
-    // Properly authenticate using OAuth2 client with user's access token
-    const { OAuth2 } = google.auth;
-    const oauth2Client = new OAuth2();
-    oauth2Client.setCredentials({ access_token: googleAccessToken });
-    const youtube = google.youtube({
-      version: "v3",
-      auth: oauth2Client,
-    });
-    const { title, description } = req.body.metadata || {};
-    const media = {
-      body: Buffer.isBuffer(videoBuffer)
-        ? stream.Readable.from(videoBuffer)
-        : stream.Readable.from(Buffer.from(videoBuffer)),
-    };
-    const requestBody = {
-      snippet: {
-        title: title || "Untitled Video",
-        description: description || "",
-      },
-      status: {
-        privacyStatus: "private",
-      },
-    };
-    try {
-      const response = await youtube.videos.insert({
-        part: "snippet,status",
-        requestBody,
-        media: {
-          body: media.body,
-        },
+
+    // Check if this is a scheduled publish
+    if (req.body.scheduledTime) {
+      const scheduledPost = await schedulingService.createScheduledPost(
+        req.user._id,
+        req.body.s3Key,
+        req.body.scheduledTime,
+        req.body.timezone || 'UTC'
+      );
+      return res.status(201).json({
+        success: true,
+        message: "Video scheduled for publishing",
+        scheduledPost
       });
-
-      // --- YouTube publish tracking ---
-      try {
-        // Find or create the video document
-        let videoDoc = await Video.findOne({ s3Key: req.body.s3Key, owner: req.user._id });
-        if (!videoDoc) {
-          videoDoc = new Video({
-            s3Key: req.body.s3Key,
-            owner: req.user._id,
-            title: title || "Untitled Video",
-            description: description || ""
-          });
-        }
-        videoDoc.publishCount = (videoDoc.publishCount || 0) + 1;
-        videoDoc.publishedToYouTube = true;
-        await videoDoc.save();
-      } catch (trackErr) {
-        // Log but do not block response
-        console.error("Failed to update YouTube publish tracking:", trackErr);
-      }
-      // --- End YouTube publish tracking ---
-
-      return res.json({ success: true, message: "Video posted to YouTube.", videoId: response.data.id });
-    } catch (err) {
-      return res.status(500).json({ error: "YouTube upload failed", details: err.message });
     }
+
+    // Immediate publish
+    const videoId = await publishVideoToYouTube(req.user._id, req.body.s3Key, req.body.metadata);
+    return res.json({
+      success: true,
+      message: "Video posted to YouTube.",
+      videoId
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
