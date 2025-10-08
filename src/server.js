@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const aiRoutes = require("./routes/ai");
 const youtubeRoutes = require('./youtube/youtubeRoutes');
+const scheduleRoutes = require('./routes/schedule');
 const videoTTSRoutes = require("../src/ai-tools/text-audio");
 const videoMountingRoutes = require("../src/ai-tools/videoMounting");
 const uploadAudioRoutes = require("./ai-tools/uploadAudio");
@@ -80,9 +81,16 @@ app.use("/auth", facebookRoutes);
 app.use("/api/publish", publishRoutes);
 app.use("/video-tts", videoTTSRoutes);
 app.use('/youtube', youtubeRoutes);
+app.use("/api/schedule", scheduleRoutes); // Register schedule routes
 app.use("/api/video", videoMountingRoutes);
 app.use("/api", uploadAudioRoutes);
 app.use("/api", instagramRoutes);
+
+// Add error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: err.message || 'Internal server error' });
+});
 
 
 app.use("/api", aimobRoutes);
