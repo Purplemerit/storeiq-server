@@ -29,8 +29,15 @@ const scheduledPostSchema = new mongoose.Schema({
     default: 'pending' 
   },
   error: String,
-  publishedVideoId: String
-}, { 
+  publishedVideoId: String,
+  title: String,
+  description: String,
+  metadata: {
+    type: Map,
+    of: String,
+    default: new Map()
+  }
+}, {
   timestamps: true 
 });
 

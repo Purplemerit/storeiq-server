@@ -41,7 +41,7 @@ class SchedulingService {
     return true;
   }
 
-  async createScheduledPost(userId, videoS3Key, scheduledTime, timezone) {
+  async createScheduledPost(userId, videoS3Key, scheduledTime, timezone, metadata = {}) {
     try {
       // Run all validations
       await this.validateSchedulingRequest(userId, videoS3Key, scheduledTime);
@@ -53,7 +53,10 @@ class SchedulingService {
         scheduledTime: scheduleDate,
         userTimezone: timezone,
         platform: 'youtube',
-        status: 'pending'
+        status: 'pending',
+        title: metadata.title,
+        description: metadata.description,
+        metadata: new Map(Object.entries(metadata))
       });
 
       await scheduledPost.save();
