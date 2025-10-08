@@ -26,22 +26,25 @@ const express = require("express");
 // Initialize express app
 const app = express();
 
-// CORS configuration
+// CORS configuration with proper cookie handling
 app.use(
- cors({
-   origin: [
-     "http://localhost:5173",
-     "https://store-iq-client.vercel.app"
-   ],
-   credentials: true,
-   allowedHeaders: [
-     "Origin",
-     "X-Requested-With",
-     "Content-Type",
-     "Accept",
-     "Authorization"
-   ],
- })
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://store-iq-client.vercel.app"
+    ],
+    credentials: true,
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "Set-Cookie"
+    ],
+    exposedHeaders: ["Set-Cookie"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  })
 );
 
 // Import all routes
@@ -59,17 +62,20 @@ const publishRoutes = require("./routes/publish");
 const PORT = process.env.PORT || 5000;
 
 // Middleware
+// Parse JSON bodies and cookies
 app.use(express.json());
 app.use(cookieParser());
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "https://store-iq-client.vercel.app"
-    ],
-    credentials: true, // allow cookies to be sent
-  })
-);
+
+// Set security headers
+app.use((req, res, next) => {
+  res.set({
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Origin': req.headers.origin || '*',
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Origin,X-Requested-With,Content-Type,Accept,Authorization,Set-Cookie'
+  });
+  next();
+});
 app.use(passport.initialize()); // no sessions
 
 // Mount routes
@@ -88,8 +94,58 @@ app.use("/api", instagramRoutes);
 
 // Add error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  // Enhanced error logging
+  console.error('Error:', {
+    message: err.message,
+    stack: err.stack,
+    code: err.code,
+    status: err.status,
+    name: err.name,
+    path: req.path,
+    method: req.method,
+    userId: req?.user?._id
+  });
+
+  // Handle specific error types
+  if (err.name === 'UnauthorizedError' || err.message?.toLowerCase().includes('unauthorized')) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      requiresReauth: true,
+      details: err.message
+    });
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      error: 'Session expired',
+      requiresReauth: true
+    });
+  }
+
+  // YouTube specific errors
+  if (err.message?.includes('YouTube') || err.code === 'YOUTUBE_ERROR') {
+    const status = err.message.includes('not linked') ? 401 : 400;
+    return res.status(status).json({
+      error: err.message,
+      service: 'youtube',
+      requiresReauth: status === 401
+    });
+  }
+
+  // Mongoose validation errors
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      error: 'Validation failed',
+      details: Object.values(err.errors).map(e => e.message)
+    });
+  }
+
+  // Default error response
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    code: err.code,
+    timestamp: new Date().toISOString()
+  });
 });
 
 

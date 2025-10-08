@@ -13,6 +13,8 @@ router.get(
     scope: [
       "profile",
       "email",
+      "https://www.googleapis.com/auth/youtube.upload",
+      "https://www.googleapis.com/auth/youtube.readonly"
     ],
     state: "login",
   })
@@ -25,6 +27,8 @@ router.get(
     scope: [
       "profile",
       "email",
+      "https://www.googleapis.com/auth/youtube.upload",
+      "https://www.googleapis.com/auth/youtube.readonly"
     ],
     state: "register",
   })

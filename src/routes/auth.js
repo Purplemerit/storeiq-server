@@ -240,12 +240,66 @@ router.post("/link-youtube", authMiddleware, async (req, res) => {
 // GET /api/auth/status - returns YouTube connection status
 router.get("/status", authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("googleAccessToken");
-    res.json({
-      youtube: !!(user && user.googleAccessToken)
-      // Add other platforms here if needed, e.g. instagram: ...
-    });
+    const user = await User.getTokensById(req.user._id);
+    
+    if (user && user.googleAccessToken) {
+      // Setup OAuth2 client
+      const { google } = require('googleapis');
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_CALLBACK_URL
+      );
+      
+      // Set credentials including refresh token if available
+      const credentials = {
+        access_token: user.googleAccessToken
+      };
+      if (user.googleRefreshToken) {
+        credentials.refresh_token = user.googleRefreshToken;
+      }
+      oauth2Client.setCredentials(credentials);
+      
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      try {
+        // Make a simple API call to test the token
+        await youtube.channels.list({ part: 'snippet', mine: true });
+        res.json({ youtube: true });
+      } catch (apiError) {
+        // Try to refresh token if we have a refresh token
+        if (user.googleRefreshToken) {
+          try {
+            const { tokens } = await oauth2Client.refreshToken(user.googleRefreshToken);
+            // Update tokens in database
+            await User.findByIdAndUpdate(req.user._id, {
+              googleAccessToken: tokens.access_token,
+              ...(tokens.refresh_token && { googleRefreshToken: tokens.refresh_token })
+            });
+            res.json({ youtube: true });
+            return;
+          } catch (refreshError) {
+            console.error('[/auth/status] Token refresh failed:', refreshError);
+            // Clear invalid tokens
+            await User.findByIdAndUpdate(
+              req.user._id,
+              { $unset: { googleAccessToken: "", googleRefreshToken: "" } }
+            );
+          }
+        } else {
+          // No refresh token available, clear access token
+          await User.findByIdAndUpdate(
+            req.user._id,
+            { $unset: { googleAccessToken: "" } }
+          );
+        }
+        res.json({ youtube: false });
+      }
+    } else {
+      res.json({ youtube: false });
+    }
   } catch (err) {
+    console.error('[/auth/status] Error:', err);
     res.status(500).json({ error: "Server error" });
   }
 });

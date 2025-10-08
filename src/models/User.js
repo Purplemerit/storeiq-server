@@ -16,16 +16,33 @@ const userSchema = new mongoose.Schema({
   facebookId: { type: String, unique: true, sparse: true },
 
   // Encrypted OAuth tokens for YouTube (Google) and Instagram (Facebook)
-  googleAccessToken: { type: String },
-  googleRefreshToken: { type: String },
-  facebookAccessToken: { type: String },
-  facebookRefreshToken: { type: String },
+  googleAccessToken: { type: String, select: false }, // Excluded from queries by default
+  googleRefreshToken: { type: String, select: false },
+  facebookAccessToken: { type: String, select: false },
+  facebookRefreshToken: { type: String, select: false },
 
   // Metadata
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   timezone: { type: String, default: 'UTC' },
+}, {
+  toJSON: {
+    transform: function(doc, ret) {
+      delete ret.googleAccessToken;
+      delete ret.googleRefreshToken;
+      delete ret.facebookAccessToken;
+      delete ret.facebookRefreshToken;
+      return ret;
+    }
+  }
 });
+
+// Method to safely fetch tokens
+userSchema.statics.getTokensById = async function(userId) {
+  return this.findById(userId)
+    .select('+googleAccessToken +googleRefreshToken +facebookAccessToken +facebookRefreshToken')
+    .exec();
+};
 
 
 // Automatically update `updatedAt` on save

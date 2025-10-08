@@ -36,7 +36,20 @@ passport.use(
           }
         }
 
+        // Store the tokens
+        user.googleAccessToken = accessToken;
+        if (refreshToken) {
+          user.googleRefreshToken = refreshToken;
+        }
+        
         await user.save();
+
+        // Log token storage for debugging
+        console.log('[GoogleStrategy] Updated user tokens:', {
+          userId: user._id,
+          hasAccessToken: !!user.googleAccessToken,
+          hasRefreshToken: !!user.googleRefreshToken
+        });
 
         // 🚀 Passport passes the user back here
         return done(null, user);

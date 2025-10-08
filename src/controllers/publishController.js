@@ -14,44 +14,70 @@ exports.publishVideoToYouTube = publishVideoToYouTube;
 async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
   console.log(`[publishVideoToYouTube] Starting upload for user ${userId}, s3Key: ${s3Key}`);
   
-  const user = await User.findById(userId).select("+googleAccessToken");
-  let googleAccessToken = user && user.googleAccessToken;
-  
-  if (!googleAccessToken && user && typeof user.get === "function") {
-    console.log('[publishVideoToYouTube] Attempting to get raw token...');
-    const rawToken = user.get("googleAccessToken", null, { getters: false });
-    if (rawToken) {
-      console.log('[publishVideoToYouTube] Found raw token');
-      googleAccessToken = rawToken;
-    }
+  console.log('[publishVideoToYouTube] Fetching user tokens...');
+  const user = await User.getTokensById(userId);
+
+  if (!user || !user.googleAccessToken) {
+    console.error('[publishVideoToYouTube] No user or YouTube access token found', {
+      hasUser: !!user,
+      hasToken: !!(user && user.googleAccessToken)
+    });
+    throw new Error("YouTube account not linked or authorization expired. Please reconnect your account.");
   }
 
-  if (!googleAccessToken && user) {
-    const mongoose = require("mongoose");
-    const nativeUser = await mongoose.connection.db
-      .collection("users")
-      .findOne({ _id: user._id }, { projection: { googleAccessToken: 1 } });
-    if (nativeUser && nativeUser.googleAccessToken) {
-      googleAccessToken = nativeUser.googleAccessToken;
-    }
-  }
+  // Initialize OAuth2 client with credentials
+  const { OAuth2 } = google.auth;
+  const oauth2Client = new OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_CALLBACK_URL
+  );
 
-  if (!user || !googleAccessToken) {
-    console.error('[publishVideoToYouTube] No user or access token found');
-    throw new Error("YouTube account not linked.");
+  // Set credentials including refresh token if available
+  const credentials = {
+    access_token: user.googleAccessToken
+  };
+  if (user.googleRefreshToken) {
+    credentials.refresh_token = user.googleRefreshToken;
+  }
+  oauth2Client.setCredentials(credentials);
+
+  // Create YouTube client
+  const youtube = google.youtube({
+    version: "v3",
+    auth: oauth2Client,
+  });
+
+  try {
+    // First verify the token with a simple API call
+    await youtube.channels.list({ part: 'snippet', mine: true });
+  } catch (tokenError) {
+    // Try to refresh the token if we have a refresh token
+    if (user.googleRefreshToken) {
+      try {
+        const { tokens } = await oauth2Client.refreshToken(user.googleRefreshToken);
+        // Update tokens in database
+        await User.findByIdAndUpdate(userId, {
+          googleAccessToken: tokens.access_token,
+          ...(tokens.refresh_token && { googleRefreshToken: tokens.refresh_token })
+        });
+        // Update client credentials
+        oauth2Client.setCredentials({
+          access_token: tokens.access_token,
+          refresh_token: user.googleRefreshToken
+        });
+      } catch (refreshError) {
+        console.error('[publishVideoToYouTube] Token refresh failed:', refreshError);
+        throw new Error("YouTube authorization expired. Please reconnect your account.");
+      }
+    } else {
+      throw new Error("YouTube authorization expired. Please reconnect your account.");
+    }
   }
 
   console.log('[publishVideoToYouTube] Fetching video from S3...');
   const videoBuffer = await s3Service.getFileBuffer(s3Key);
   console.log('[publishVideoToYouTube] Video fetched successfully');
-  const { OAuth2 } = google.auth;
-  const oauth2Client = new OAuth2();
-  oauth2Client.setCredentials({ access_token: googleAccessToken });
-  
-  const youtube = google.youtube({
-    version: "v3",
-    auth: oauth2Client,
-  });
 
   const { title, description } = metadata;
   const media = {
