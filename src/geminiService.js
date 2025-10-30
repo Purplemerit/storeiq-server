@@ -88,7 +88,12 @@ async function generateVideo(script, videoConfig) {
       };
     }
 
-    throw new Error('Veo-3 API error: ' + (err.response?.data?.error?.message || err.message));
+    throw new Error(JSON.stringify({
+      error: 'Veo-3 API error',
+      message: err.response?.data?.error?.message || err.message,
+      status: err.response?.status || 500,
+      details: err.response?.data || null
+    }));
   }
 }
 
