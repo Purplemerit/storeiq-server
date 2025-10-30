@@ -15,7 +15,7 @@ function authMiddleware(req, res, next) {
     method: req.method
   };
 
-  console.log('[authMiddleware] Auth debug:', authDebug);
+
 
   // 1️⃣ Try cookie first (OAuth login)
   if (req.cookies?.token) {

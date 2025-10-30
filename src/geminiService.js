@@ -25,7 +25,7 @@ async function listModels(apiKey = GEMINI_API_KEY) {
       `${GEMINI_LIST_MODELS_URL}?key=${apiKey}`
     );
     const models = response.data.models || [];
-    console.log(`Available models for key ${apiKey === GEMINI_API_KEY ? 'GEMINI_API_KEY' : 'VEO3_API_KEY'}:`, models.map(m => m.name));
+    console.log(`Available models for key ${apiKey === GEMINI_API_KEY ? 'GEMINI_API_KEY' : 'VEO3_API_KEY'}:`, JSON.stringify(models, null, 2));
     return models;
   } catch (err) {
     console.error('Error fetching models:', err.response?.data?.error?.message || err.message);
@@ -56,6 +56,15 @@ async function generateScript(prompt) {
 
 async function generateVideo(script, videoConfig) {
   try {
+    console.log('Veo-3 API Request:', {
+        url: `${VEO3_API_URL}?key=${VEO3_API_KEY}`,
+        model: "veo-3",
+        payload: JSON.stringify({
+            contents: [{ parts: [{ text: script.prompt }] }],
+            videoConfig,
+            ...(videoConfig ? { videoConfig } : {})
+        })
+    });
     const response = await axios.post(
       `${VEO3_API_URL}?key=${VEO3_API_KEY}`,
       {
@@ -65,13 +74,20 @@ async function generateVideo(script, videoConfig) {
     );
     // Veo-3 returns video in base64 or as a URL (assume base64 for this example)
     const videoBase64 = response.data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!videoBase64) throw new Error('No video returned from Veo-3');
+    if (!videoBase64) {
+        console.error('Veo-3 API response status:', response.status);
+        console.error('Veo-3 API response headers:', JSON.stringify(response.headers, null, 2));
+        console.error('Veo-3 API response:', JSON.stringify(response.data, null, 2));
+        throw new Error('No video returned from Veo-3');
+    }
     return videoBase64;
   } catch (err) {
     // Log the error and status for diagnosis
     // Log the full Gemini error response for debugging
     if (err.response) {
-      console.error('Veo-3 API error FULL RESPONSE:', JSON.stringify(err.response.data, null, 2));
+      console.error('Veo-3 API error FULL RESPONSE:', JSON.stringify(err.response?.data || {}, null, 2));
+      console.error('Veo-3 API error status:', err.response?.status || 'No status');
+      console.error('Veo-3 API error headers:', JSON.stringify(err.response?.headers || {}, null, 2));
     } else {
       console.error('Veo-3 API error (no response):', err.message);
     }
