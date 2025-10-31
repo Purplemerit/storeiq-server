@@ -97,14 +97,21 @@ async function generateImage(req, res) {
       username,
       { generated: "true", prompt }
     );
-    if (!s3Result || !s3Result.url) {
+    if (!s3Result || !s3Result.key) {
       return res.status(502).json({ error: 'Failed to upload image to S3' });
     }
 
+    // Generate signed download URL
+    const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+    const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+    const s3Client = new S3Client({ region: process.env.AWS_REGION });
+    const getCommand = new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: s3Result.key });
+    const signedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+
     // Respond with metadata
     return res.json({
-      imageUrl: s3Result.url,
-      url: s3Result.url,
+      imageUrl: signedUrl,
+      url: signedUrl,
       s3Key: s3Result.key,
       prompt,
       userId,

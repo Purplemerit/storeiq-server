@@ -3,6 +3,7 @@ const authRouter = require("./auth");
 const aiRouter = require("./ai");
 const videoRouter = require("./video");
 const scriptHistoryRouter = require("./scriptHistory");
+const s3Router = require("./s3");
 
 const statsRouter = require("./stats");
 const router = express.Router();
@@ -16,7 +17,7 @@ router.use("/", authRouter); // Expose /me at /api/me
 router.use("/", bodyParser(), urlencoded({ extended: true }), aiRouter);
 router.use("/", videoRouter); // No body parser for videoRouter (upload-video)
 router.use("/scripts", bodyParser(), urlencoded({ extended: true }), scriptHistoryRouter);
-
 router.use("/stats", statsRouter);
+router.use("/s3", s3Router);
 
 module.exports = router;

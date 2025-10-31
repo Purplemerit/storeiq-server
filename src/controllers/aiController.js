@@ -52,7 +52,6 @@ async function handleGenerateVideo(req, res) {
  */
 const { listUserVideosFromS3 } = require('../s3Service');
 async function getUserVideos(req, res) {
-  console.log('[GET /api/videos] req.user:', req.user, 'Properties:', req.user ? Object.keys(req.user) : null);
   const userId = req.user && req.user._id ? req.user._id.toString() : null;
   const username = req.user && req.user.username ? req.user.username : null;
   if (!userId) {
@@ -65,9 +64,6 @@ async function getUserVideos(req, res) {
   // Fetch all MongoDB video records for this user
   const Video = require('../models/Video');
   const mongoVideos = await Video.find({ owner: userId });
-  // Debug: log S3 keys and MongoDB s3Keys
-  console.log('[getUserVideos] S3 keys:', videos.map(v => v.key));
-  console.log('[getUserVideos] MongoDB s3Keys:', mongoVideos.map(mv => mv.s3Key));
     // For each video, generate a signed URL and merge MongoDB metadata if available
     const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
     const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');

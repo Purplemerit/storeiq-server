@@ -30,8 +30,14 @@ async function editImage(req, res) {
   try {
     const user = req.user;
     const prompt = req.body?.prompt;
-    const imageFile = req.files?.image?.[0];
-    const maskFile = req.files?.mask?.[0];
+    // Accept either direct upload (multer) or S3 key
+    let imageBuffer, imageMimeType;
+    let maskBuffer = null, maskMimeType = null;
+    let inputType = 'upload';
+    // S3 key support
+    const imageS3Key = req.body?.imageS3Key;
+    const maskS3Key = req.body?.maskS3Key;
+    const s3Service = require('../s3Service');
 
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -39,8 +45,26 @@ async function editImage(req, res) {
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Prompt is required' });
     }
-    if (!imageFile) {
-      return res.status(400).json({ error: 'Image file is required' });
+
+    // Prefer S3 key if provided, else use upload
+    if (imageS3Key) {
+      imageBuffer = await s3Service.getFileBuffer(imageS3Key);
+      // Guess mimetype from extension
+      imageMimeType = imageS3Key.endsWith('.jpg') || imageS3Key.endsWith('.jpeg') ? 'image/jpeg' : imageS3Key.endsWith('.png') ? 'image/png' : 'image/*';
+      inputType = 's3';
+    } else if (req.files?.image?.[0]) {
+      imageBuffer = req.files.image[0].buffer;
+      imageMimeType = req.files.image[0].mimetype || 'image/png';
+    } else {
+      return res.status(400).json({ error: 'Image file or imageS3Key is required' });
+    }
+
+    if (maskS3Key) {
+      maskBuffer = await s3Service.getFileBuffer(maskS3Key);
+      maskMimeType = maskS3Key.endsWith('.jpg') || maskS3Key.endsWith('.jpeg') ? 'image/jpeg' : maskS3Key.endsWith('.png') ? 'image/png' : 'image/*';
+    } else if (req.files?.mask?.[0]) {
+      maskBuffer = req.files.mask[0].buffer;
+      maskMimeType = req.files.mask[0].mimetype || 'image/png';
     }
 
     // Call Gemini API with gemini-2.5-flash-image model
@@ -50,14 +74,14 @@ async function editImage(req, res) {
     }
 
     // Convert image to base64
-    const imageBase64Input = imageFile.buffer.toString('base64');
-    const imageMimeType = imageFile.mimetype || 'image/png';
+    const imageBase64Input = imageBuffer.toString('base64');
 
     // Use Gemini 2.5 Flash Image model (supports image editing)
     const geminiModel = "gemini-2.5-flash-image";
     const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
 
     console.log('Editing image with Gemini 2.5 Flash Image...');
+
 
     // Build the request with inline image data
     const parts = [
@@ -71,11 +95,9 @@ async function editImage(req, res) {
         text: prompt
       }
     ];
-
     // If mask is provided, include it as well
-    if (maskFile) {
-      const maskBase64 = maskFile.buffer.toString('base64');
-      const maskMimeType = maskFile.mimetype || 'image/png';
+    if (maskBuffer) {
+      const maskBase64 = maskBuffer.toString('base64');
       parts.unshift({
         inline_data: {
           mime_type: maskMimeType,
@@ -126,8 +148,8 @@ async function editImage(req, res) {
       return res.status(502).json({ error: 'Image editing failed - no image data returned' });
     }
 
-    const imageBase64 = imagePart.inline_data.data;
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
+  const imageBase64 = imagePart.inline_data.data;
+  imageBuffer = Buffer.from(imageBase64, 'base64');
     const userId = user.id || user._id;
     const username = user.username || userId;
     const fileName = `edited/${userId}/${Date.now()}-edited.png`;
@@ -135,24 +157,32 @@ async function editImage(req, res) {
     const s3Result = await s3Service.uploadImageBuffer(
       imageBuffer,
       'image/png',
-      userId,
-      username,
+      user.id || user._id,
+      user.username || user.id || user._id,
       { edited: "true", prompt }
     );
-    if (!s3Result || !s3Result.url) {
+    if (!s3Result || !s3Result.key) {
       return res.status(502).json({ error: 'Failed to upload edited image to S3' });
     }
 
+    // Generate signed download URL
+    const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+    const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+    const s3Client = new S3Client({ region: process.env.AWS_REGION });
+    const getCommand = new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: s3Result.key });
+    const signedUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
+
     return res.json({
-      imageUrl: s3Result.url,
-      url: s3Result.url,
+      imageUrl: signedUrl,
+      url: signedUrl,
       s3Key: s3Result.key,
       prompt,
-      userId,
+      userId: user.id || user._id,
       fileName,
       createdAt: new Date().toISOString(),
       provider: 'gemini-2.5-flash-image',
-      editType: maskFile ? 'masked-editing' : 'image-editing',
+      editType: maskBuffer ? 'masked-editing' : 'image-editing',
+      inputType,
     });
   } catch (err) {
     console.error('Image edit error:', err?.response?.data || err.message);
