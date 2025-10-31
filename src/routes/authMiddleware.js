@@ -19,13 +19,11 @@ function authMiddleware(req, res, next) {
 
   // 1️⃣ Try cookie first (OAuth login)
   if (req.cookies?.token) {
-    console.log('[authMiddleware] Found token in cookies');
     token = req.cookies.token;
   }
 
   // 2️⃣ Fallback to Authorization header (Bearer token)
   if (!token && req.headers['authorization']?.startsWith('Bearer ')) {
-    console.log('[authMiddleware] Found token in Authorization header');
     token = req.headers['authorization'].split(' ')[1];
   }
 
@@ -91,11 +89,6 @@ function authMiddleware(req, res, next) {
             username: userDoc.username || req.user.username,
             email: userDoc.email || req.user.email
           };
-          console.log('[authMiddleware] Updated user info:', {
-            id: req.user._id,
-            hasUsername: !!req.user.username,
-            hasEmail: !!req.user.email
-          });
         }
       } catch (err) {
         console.error('[authMiddleware] Failed to fetch user from DB:', {

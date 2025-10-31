@@ -127,10 +127,14 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
 // POST /api/publish/youtube
 exports.publishToYouTube = async (req, res) => {
   try {
-    // Enforce user-level access: s3Key must start with videos/{username}/
+    // Debug logs for troubleshooting auth issues
+    console.log('[publishToYouTube] req.user:', req.user);
+    console.log('[publishToYouTube] req.body.s3Key:', req.body.s3Key);
     const username = req.user && req.user.username ? req.user.username : null;
     const expectedPrefix = username ? `videos/${username}/` : req.user._id;
+    console.log('[publishToYouTube] expectedPrefix:', expectedPrefix);
     if (!req.body.s3Key || typeof req.body.s3Key !== "string" || !req.body.s3Key.startsWith(expectedPrefix)) {
+      console.warn('[publishToYouTube] s3Key does not match expectedPrefix!');
       return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
     }
 
