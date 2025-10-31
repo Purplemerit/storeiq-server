@@ -23,11 +23,13 @@ async function downloadToFile(url, dest) {
 }
 
 async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
+  // Use -ss before -i (input seeking), and -t (duration) after -i for accurate cropping
+  const duration = end - start;
   const baseArgs = [
     '-y',
     '-ss', String(start),
     '-i', inputPath,
-    '-to', String(end)
+    '-t', String(duration)
   ];
   let filter = null;
 
@@ -77,7 +79,18 @@ async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
       args.push('-c', 'copy');
     }
     args.push(outputPath);
+    console.log('[VIDEO-CROP][FFMPEG] Running ffmpeg with args:', args.join(' '));
     execFile('ffmpeg', args, (err, stdout, stderr) => {
+      // Write ffmpeg stderr to a log file for debugging
+      try {
+        fs.writeFileSync(
+          path.join(TMP_DIR, 'ffmpeg_crop_debug.log'),
+          `Args: ${args.join(' ')}\nSTDERR:\n${stderr}\nSTDOUT:\n${stdout}\n`,
+          { flag: 'a' }
+        );
+      } catch (e) {
+        console.error('[VIDEO-CROP][FFMPEG][LOG] Failed to write ffmpeg log:', e);
+      }
       if (err) return reject(new Error(stderr || err.message));
       resolve();
     });
