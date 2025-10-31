@@ -318,14 +318,18 @@ async function listUserImagesFromS3(userId, username) {
  */
 const { GetObjectCommand } = require('@aws-sdk/client-s3');
 
-async function generatePresignedUrl(filename, contentType, userId) {
+async function generatePresignedUrl(filename, contentType, userId, username) {
   if (!userId) throw new Error('userId is required for presigned URL');
   if (!filename) throw new Error('filename is required');
   if (!contentType) throw new Error('contentType is required');
   const timestamp = Date.now();
   const random = crypto.randomBytes(6).toString('hex');
   const ext = filename.split('.').pop() || 'mp4';
-  const key = `videos/${userId}/video-${timestamp}-${random}.${ext}`;
+  // Use username if available and non-empty, else fallback to userId
+  const safeUsername = (username && typeof username === "string" && username.trim().length > 0)
+    ? username.trim()
+    : userId;
+  const key = `videos/${safeUsername}/video-${timestamp}-${random}.${ext}`;
   const putCommand = new PresignPutObjectCommand({
     Bucket: AWS_BUCKET_NAME,
     Key: key,

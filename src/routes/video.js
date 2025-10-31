@@ -1,3 +1,6 @@
+
+
+
 const express = require('express');
 const { deleteVideoFromS3, uploadVideoBase64, uploadVideoBuffer } = require('../s3Service');
 const { generateVideo } = require('../geminiService');
@@ -5,12 +8,35 @@ const { getUserVideos } = require('../controllers/aiController');
 const authMiddleware = require('./authMiddleware');
 const multer = require('multer');
 const { listUserImagesFromS3 } = require('../s3Service');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const S3_BUCKET = process.env.AWS_S3_BUCKET || 'store-iq-bucket';
+const REGION = process.env.AWS_REGION || 'ap-south-1';
+const Video = require('../models/Video');
 
 const router = express.Router();
 const {
   createJob,
   getJob
 } = require('../videoEditJob');
+
+// GET /api/signed-url endpoint (after router is initialized)
+router.get('/signed-url', authMiddleware, async (req, res) => {
+  const s3Key = req.query.s3Key;
+  if (!s3Key || typeof s3Key !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid s3Key' });
+  }
+  // Optionally, enforce user-level access to the s3Key here
+  // (e.g., check that s3Key starts with user's folder)
+  try {
+    const s3 = new S3Client({ region: REGION });
+    const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: s3Key });
+    const url = await getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour expiry
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to generate signed URL' });
+  }
+});
 
 /**
  * DELETE /api/delete-video
@@ -172,8 +198,9 @@ router.get('/images', authMiddleware, async (req, res) => {
 const { generatePresignedUrl } = require('../s3Service');
 router.post('/s3-presigned-url', authMiddleware, async (req, res) => {
   const { filename, contentType } = req.body;
-  // Extract userId from authenticated user
+  // Extract userId and username from authenticated user
   const userId = req.user && req.user._id ? req.user._id.toString() : null;
+  const username = req.user && req.user.username ? req.user.username : null;
   if (!userId) {
     return res.status(401).json({ error: 'User authentication required' });
   }
@@ -181,7 +208,7 @@ router.post('/s3-presigned-url', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Missing filename or contentType' });
   }
   try {
-    const { url, fileUrl, key } = await generatePresignedUrl(filename, contentType, userId);
+    const { url, fileUrl, key } = await generatePresignedUrl(filename, contentType, userId, username);
     res.json({ url, fileUrl, s3Key: key });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to generate presigned URL' });
@@ -363,6 +390,31 @@ router.get('/video/crop/:job_id', async (req, res) => {
     downloadUrl: job.downloadUrl,
     key: job.key || job.s3Key || null
   });
+});
+
+// Register a video in the database (uploaded or AI-generated)
+
+router.post('/register-video', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user && req.user._id ? req.user._id.toString() : null;
+    if (!userId) return res.status(401).json({ error: 'User authentication required' });
+    const { s3Key, title, description } = req.body;
+    if (!s3Key) return res.status(400).json({ error: 'Missing s3Key' });
+    // Check if already exists
+    let video = await Video.findOne({ s3Key });
+    if (!video) {
+      video = new Video({
+        s3Key,
+        owner: userId,
+        title: title || '',
+        description: description || '',
+      });
+      await video.save();
+    }
+    res.json({ success: true, video });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to register video' });
+  }
 });
 
 module.exports = router;
