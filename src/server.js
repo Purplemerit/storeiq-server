@@ -62,8 +62,28 @@ const publishRoutes = require("./routes/publish");
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-// Parse JSON bodies and cookies
-app.use(express.json());
+// Parse JSON bodies and cookies with increased size limit for image uploads
+// Skip body parsing for file upload routes - let multer handle them
+app.use((req, res, next) => {
+  // Skip body parsing for file upload endpoints
+  if (req.path === '/api/ai/edit-image') {
+    console.log('[Body Parser] Skipping for file upload route:', req.path);
+    return next();
+  }
+
+  // Check content type as backup
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    console.log('[Body Parser] Skipping for multipart content-type:', contentType);
+    return next();
+  }
+
+  // Apply JSON and urlencoded parsers for other requests
+  express.json({ limit: '50mb' })(req, res, (err) => {
+    if (err) return next(err);
+    express.urlencoded({ limit: '50mb', extended: true })(req, res, next);
+  });
+});
 app.use(cookieParser());
 
 // Set security headers
