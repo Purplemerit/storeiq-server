@@ -7,6 +7,7 @@ const VideoSchema = new mongoose.Schema({
   description: { type: String },
   publishCount: { type: Number, default: 0 },
   publishedToYouTube: { type: Boolean, default: false },
+  lastPublishedAt: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 

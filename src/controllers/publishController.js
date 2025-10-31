@@ -119,7 +119,15 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
   }
   videoDoc.publishCount = (videoDoc.publishCount || 0) + 1;
   videoDoc.publishedToYouTube = true;
+  videoDoc.lastPublishedAt = new Date();
   await videoDoc.save();
+  console.log('[publishVideoToYouTube] Saved videoDoc:', {
+    s3Key: videoDoc.s3Key,
+    lastPublishedAt: videoDoc.lastPublishedAt,
+    createdAt: videoDoc.createdAt,
+    publishCount: videoDoc.publishCount,
+    publishedToYouTube: videoDoc.publishedToYouTube
+  });
 
   return response.data.id;
 }

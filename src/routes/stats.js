@@ -123,8 +123,10 @@ router.get('/timeseries', authMiddleware, async (req, res) => {
       return match;
     }
 
-    // Group by day
-    const groupFormat = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+  // Group by day for createdAt
+  const groupFormat = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+  // Group by day for lastPublishedAt
+  const groupPublishedFormat = { $dateToString: { format: "%Y-%m-%d", date: "$lastPublishedAt" } };
 
     // 1. Scripts generated per day
     const scriptMatch = { userId: userId.toString(), ...buildDateMatch('createdAt') };
@@ -170,15 +172,25 @@ router.get('/timeseries', authMiddleware, async (req, res) => {
           aiImageAgg = [];
         }
 
-    // 3. Published videos per day
+    // 3. Published videos per day (group by lastPublishedAt)
     const publishedMatch = {
       owner: userId,
       $or: [{ publishedToYouTube: true }, { publishCount: { $gt: 0 } }],
-      ...buildDateMatch('createdAt')
+      lastPublishedAt: { $exists: true, $ne: null },
+      ...buildDateMatch('lastPublishedAt')
     };
+    // Debug: print matched published videos
+    const publishedDocs = await Video.find(publishedMatch).lean();
+    console.log('[stats/timeseries] Matched published videos:', publishedDocs.map(v => ({
+      s3Key: v.s3Key,
+      lastPublishedAt: v.lastPublishedAt,
+      createdAt: v.createdAt,
+      publishCount: v.publishCount,
+      publishedToYouTube: v.publishedToYouTube
+    })));
     const publishedAgg = await Video.aggregate([
       { $match: publishedMatch },
-      { $group: { _id: groupFormat, count: { $sum: 1 } } },
+      { $group: { _id: groupPublishedFormat, count: { $sum: 1 } } },
       { $sort: { _id: 1 } }
     ]);
 
@@ -199,6 +211,7 @@ router.get('/timeseries', authMiddleware, async (req, res) => {
         // Fill missing dates with zeroes
         const data = allDates.map(date => ({
           date,
+          label: date, // for recharts XAxis
           aiVideosGeneratedCount: aiVideoMap[date] || 0,
           aiImagesGeneratedCount: aiImageMap[date] || 0,
           scriptGeneratedCount: scriptMap[date] || 0,
