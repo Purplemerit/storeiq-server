@@ -67,14 +67,12 @@ const PORT = process.env.PORT || 5000;
 app.use((req, res, next) => {
   // Skip body parsing for file upload endpoints
   if (req.path === '/api/ai/edit-image') {
-    console.log('[Body Parser] Skipping for file upload route:', req.path);
     return next();
   }
 
   // Check content type as backup
   const contentType = req.headers['content-type'] || '';
   if (contentType.includes('multipart/form-data')) {
-    console.log('[Body Parser] Skipping for multipart content-type:', contentType);
     return next();
   }
 

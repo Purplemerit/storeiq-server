@@ -1,13 +1,16 @@
 // server/src/controllers/imageEditController.js
 //
-// Image editing using Google Gemini Imagen 3
-// Migrated from Stability AI to Gemini Imagen 3 for better integration
+// Image editing using Google Gemini 2.5 Flash Image (aka "Nano Banana")
+// Migrated from Stability AI to Gemini for better integration
 //
 // Required Environment Variables:
 // - GEMINI_API_KEY: Your Google Gemini API key
 //
+// Model: gemini-2.5-flash-image
+// Supports: Image editing, multi-turn editing, image composition
+//
 // API Documentation:
-// https://ai.google.dev/gemini-api/docs/imagen
+// https://ai.google.dev/gemini-api/docs/image-generation
 
 const axios = require('axios');
 const s3Service = require('../s3Service');
@@ -25,9 +28,6 @@ const sharp = require('sharp');
  */
 async function editImage(req, res) {
   try {
-    console.log('[Image Edit] req.body:', req.body);
-    console.log('[Image Edit] req.files:', req.files);
-
     const user = req.user;
     const prompt = req.body?.prompt;
     const imageFile = req.files?.image?.[0];
@@ -37,20 +37,13 @@ async function editImage(req, res) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({
-        error: 'Prompt is required',
-        debug: {
-          bodyExists: !!req.body,
-          promptValue: prompt,
-          bodyKeys: req.body ? Object.keys(req.body) : []
-        }
-      });
+      return res.status(400).json({ error: 'Prompt is required' });
     }
     if (!imageFile) {
       return res.status(400).json({ error: 'Image file is required' });
     }
 
-    // Call Gemini Imagen API
+    // Call Gemini API with gemini-2.5-flash-image model
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) {
       return res.status(500).json({ error: 'Gemini API key not configured' });
@@ -60,65 +53,80 @@ async function editImage(req, res) {
     const imageBase64Input = imageFile.buffer.toString('base64');
     const imageMimeType = imageFile.mimetype || 'image/png';
 
-    // Use Gemini Imagen 3 model for image editing
-    // Model: imagen-3.0-generate-002 (Imagen 3 Fast)
-    const imagenModel = "imagen-3.0-generate-002";
-    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${imagenModel}:predict`;
+    // Use Gemini 2.5 Flash Image model (supports image editing)
+    const geminiModel = "gemini-2.5-flash-image";
+    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
 
-    console.log('Editing image with Gemini Imagen 3...');
+    console.log('Editing image with Gemini 2.5 Flash Image...');
 
-    // Build request based on whether mask is provided
-    const requestBody = {
-      instances: [
-        {
-          prompt: prompt,
-          image: {
-            bytesBase64Encoded: imageBase64Input
-          }
+    // Build the request with inline image data
+    const parts = [
+      {
+        inline_data: {
+          mime_type: imageMimeType,
+          data: imageBase64Input
         }
-      ],
-      parameters: {
-        sampleCount: 1,
-        mode: maskFile ? "upscale" : "upscale", // Gemini uses upscale mode for editing
-        safetyFilterLevel: "block_some",
-        personGeneration: "allow_adult"
+      },
+      {
+        text: prompt
       }
-    };
+    ];
 
-    // If mask is provided, add it to the request
+    // If mask is provided, include it as well
     if (maskFile) {
       const maskBase64 = maskFile.buffer.toString('base64');
-      requestBody.instances[0].mask = {
-        bytesBase64Encoded: maskBase64
-      };
+      const maskMimeType = maskFile.mimetype || 'image/png';
+      parts.unshift({
+        inline_data: {
+          mime_type: maskMimeType,
+          data: maskBase64
+        }
+      });
     }
+
+    const requestBody = {
+      contents: [
+        {
+          parts: parts
+        }
+      ],
+      generationConfig: {
+        temperature: 0.4,
+        topK: 32,
+        topP: 1,
+        maxOutputTokens: 4096
+      }
+    };
 
     const geminiResponse = await axios.post(
       geminiApiUrl,
       requestBody,
       {
         headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': geminiApiKey
+          'Content-Type': 'application/json'
         },
       }
     );
 
     console.log('Gemini API response received');
 
-    // The API returns predictions array
-    const predictions = geminiResponse.data.predictions;
-    if (!predictions || !predictions.length) {
-      console.error('No predictions in response:', geminiResponse.data);
-      return res.status(502).json({ error: 'Image editing failed - no predictions returned' });
+    // Extract the generated image from the response
+    const candidates = geminiResponse.data.candidates;
+    if (!candidates || !candidates.length) {
+      console.error('No candidates in response:', geminiResponse.data);
+      return res.status(502).json({ error: 'Image editing failed - no candidates returned' });
     }
 
-    // Extract the base64 image from the response
-    const imageBase64 = predictions[0].bytesBase64Encoded;
-    if (!imageBase64) {
-      console.error('No bytesBase64Encoded in response:', predictions[0]);
+    // Find the image part in the response
+    const content = candidates[0].content;
+    const imagePart = content.parts?.find(part => part.inline_data?.mime_type?.startsWith('image/'));
+
+    if (!imagePart || !imagePart.inline_data?.data) {
+      console.error('No image data in response:', content);
       return res.status(502).json({ error: 'Image editing failed - no image data returned' });
     }
+
+    const imageBase64 = imagePart.inline_data.data;
     const imageBuffer = Buffer.from(imageBase64, 'base64');
     const userId = user.id || user._id;
     const username = user.username || userId;
@@ -143,8 +151,8 @@ async function editImage(req, res) {
       userId,
       fileName,
       createdAt: new Date().toISOString(),
-      provider: 'gemini-imagen-3',
-      editType: maskFile ? 'inpainting' : 'upscale',
+      provider: 'gemini-2.5-flash-image',
+      editType: maskFile ? 'masked-editing' : 'image-editing',
     });
   } catch (err) {
     console.error('Image edit error:', err?.response?.data || err.message);
