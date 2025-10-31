@@ -2,6 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const authMiddleware = require('./authMiddleware');
 const ScriptHistory = require('../models/ScriptHistory');
 const { listUserVideosFromS3, listUserImagesFromS3 } = require('../s3Service');
@@ -50,7 +51,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
 
     // Count published videos for this user (publishedToYouTube true OR publishCount > 0)
     const publishedFilter = {
-      owner: userId,
+      owner: mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId,
       $or: [
         { publishedToYouTube: true },
         { publishCount: { $gt: 0 } }
@@ -174,15 +175,27 @@ router.get('/timeseries', authMiddleware, async (req, res) => {
 
     // 3. Published videos per day (group by lastPublishedAt)
     const publishedMatch = {
-      owner: userId,
+      owner: mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId,
       $or: [{ publishedToYouTube: true }, { publishCount: { $gt: 0 } }],
-      lastPublishedAt: { $exists: true, $ne: null },
-      ...buildDateMatch('lastPublishedAt')
+      lastPublishedAt: { $exists: true, $ne: null }
     };
+
+    // Add date range filtering without overwriting lastPublishedAt
+    const dateFilter = buildDateMatch('lastPublishedAt');
+    if (dateFilter.lastPublishedAt) {
+      publishedMatch.lastPublishedAt = {
+        ...publishedMatch.lastPublishedAt,
+        ...dateFilter.lastPublishedAt
+      };
+    }
+
     // Debug: print matched published videos
     const publishedDocs = await Video.find(publishedMatch).lean();
+    console.log('[stats/timeseries] publishedMatch query:', JSON.stringify(publishedMatch, null, 2));
+    console.log('[stats/timeseries] userId type:', typeof userId, 'value:', userId);
     console.log('[stats/timeseries] Matched published videos:', publishedDocs.map(v => ({
       s3Key: v.s3Key,
+      owner: v.owner,
       lastPublishedAt: v.lastPublishedAt,
       createdAt: v.createdAt,
       publishCount: v.publishCount,
