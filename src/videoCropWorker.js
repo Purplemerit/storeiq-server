@@ -232,7 +232,7 @@ module.exports = { pollAndProcess };
 // --- Render Web Service Port Binding Hack ---
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT1 || 5001;
 app.get('/', (req, res) => res.send('Video Crop Worker running'));
 app.listen(PORT, () => {
   console.log(`[VIDEO-CROP][WORKER] Dummy HTTP server listening on port ${PORT} (for Render Web Service requirement)`);
