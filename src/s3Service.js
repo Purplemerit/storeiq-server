@@ -134,7 +134,6 @@ async function uploadVideoBuffer(buffer, mimetype, userId, username, metadata = 
       ext = mimetype.split('/')[1];
     }
     const key = `videos/${safeUsername}/video-${timestamp}-${random}.${ext}`;
-    console.log('[S3][UPLOAD] userId:', userId, 'username:', username, 'key:', key);
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,
@@ -147,7 +146,6 @@ async function uploadVideoBuffer(buffer, mimetype, userId, username, metadata = 
     await s3.send(command);
 
     const url = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
-    console.log('[S3][UPLOAD] Uploaded to:', url);
     return { url, key };
   } catch (err) {
     throw new Error('Failed to upload video to S3');
@@ -173,7 +171,6 @@ async function uploadImageBuffer(buffer, mimetype, userId, username, metadata = 
       ext = mimetype.split('/')[1];
     }
     const key = `images/${safeUsername}/image-${timestamp}-${random}.${ext}`;
-    console.log('[S3][UPLOAD][IMAGE] userId:', userId, 'username:', username, 'key:', key);
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,
@@ -186,7 +183,6 @@ async function uploadImageBuffer(buffer, mimetype, userId, username, metadata = 
     await s3.send(command);
 
     const url = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
-    console.log('[S3][UPLOAD][IMAGE] Uploaded to:', url);
     return { url, key };
   } catch (err) {
     throw new Error('Failed to upload image to S3');
@@ -490,7 +486,6 @@ async function uploadAudioBuffer(buffer, mimetype, userId, username, metadata = 
       ext = mimetype.split('/')[1];
     }
     const key = `audios/${safeUsername}/audio-${timestamp}-${random}.${ext}`;
-    console.log('[S3][UPLOAD][AUDIO] userId:', userId, 'username:', username, 'key:', key);
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,
@@ -503,7 +498,6 @@ async function uploadAudioBuffer(buffer, mimetype, userId, username, metadata = 
     await s3.send(command);
 
     const url = `https://${AWS_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
-    console.log('[S3][UPLOAD][AUDIO] Uploaded to:', url);
     return { url, key };
   } catch (err) {
     console.error('[S3][UPLOAD][AUDIO] Failed:', err);

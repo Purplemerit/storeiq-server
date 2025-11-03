@@ -191,16 +191,6 @@ router.get('/timeseries', authMiddleware, async (req, res) => {
 
     // Debug: print matched published videos
     const publishedDocs = await Video.find(publishedMatch).lean();
-    console.log('[stats/timeseries] publishedMatch query:', JSON.stringify(publishedMatch, null, 2));
-    console.log('[stats/timeseries] userId type:', typeof userId, 'value:', userId);
-    console.log('[stats/timeseries] Matched published videos:', publishedDocs.map(v => ({
-      s3Key: v.s3Key,
-      owner: v.owner,
-      lastPublishedAt: v.lastPublishedAt,
-      createdAt: v.createdAt,
-      publishCount: v.publishCount,
-      publishedToYouTube: v.publishedToYouTube
-    })));
     const publishedAgg = await Video.aggregate([
       { $match: publishedMatch },
       { $group: { _id: groupPublishedFormat, count: { $sum: 1 } } },

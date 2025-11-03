@@ -12,9 +12,6 @@ exports.publishVideoToYouTube = publishVideoToYouTube;
 
 // Utility function to publish video to YouTube
 async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
-  console.log(`[publishVideoToYouTube] Starting upload for user ${userId}, s3Key: ${s3Key}`);
-  
-  console.log('[publishVideoToYouTube] Fetching user tokens...');
   const user = await User.getTokensById(userId);
 
   if (!user || !user.googleAccessToken) {
@@ -75,9 +72,7 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
     }
   }
 
-  console.log('[publishVideoToYouTube] Fetching video from S3...');
   const videoBuffer = await s3Service.getFileBuffer(s3Key);
-  console.log('[publishVideoToYouTube] Video fetched successfully');
 
   const { title, description } = metadata;
   const media = {
@@ -96,7 +91,6 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
     },
   };
 
-  console.log('[publishVideoToYouTube] Initiating YouTube upload...');
   const response = await youtube.videos.insert({
     part: "snippet,status",
     requestBody,
@@ -104,10 +98,8 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
       body: media.body,
     },
   });
-  console.log('[publishVideoToYouTube] Upload successful, video ID:', response.data.id);
 
   // Update video tracking
-  console.log('[publishVideoToYouTube] Updating video tracking...');
   let videoDoc = await Video.findOne({ s3Key, owner: userId });
   if (!videoDoc) {
     videoDoc = new Video({
@@ -121,13 +113,6 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
   videoDoc.publishedToYouTube = true;
   videoDoc.lastPublishedAt = new Date();
   await videoDoc.save();
-  console.log('[publishVideoToYouTube] Saved videoDoc:', {
-    s3Key: videoDoc.s3Key,
-    lastPublishedAt: videoDoc.lastPublishedAt,
-    createdAt: videoDoc.createdAt,
-    publishCount: videoDoc.publishCount,
-    publishedToYouTube: videoDoc.publishedToYouTube
-  });
 
   return response.data.id;
 }
@@ -136,13 +121,10 @@ async function publishVideoToYouTube(userId, s3Key, metadata = {}) {
 exports.publishToYouTube = async (req, res) => {
   try {
     // Debug logs for troubleshooting auth issues
-    console.log('[publishToYouTube] req.user:', req.user);
-    console.log('[publishToYouTube] req.body.s3Key:', req.body.s3Key);
-    const username = req.user && req.user.username ? req.user.username : null;
-    const expectedPrefix = username ? `videos/${username}/` : req.user._id;
-    console.log('[publishToYouTube] expectedPrefix:', expectedPrefix);
+  const username = req.user && req.user.username ? req.user.username : null;
+  const expectedPrefix = username ? `videos/${username}/` : req.user._id;
     if (!req.body.s3Key || typeof req.body.s3Key !== "string" || !req.body.s3Key.startsWith(expectedPrefix)) {
-      console.warn('[publishToYouTube] s3Key does not match expectedPrefix!');
+  console.warn('[publishToYouTube] s3Key does not match expectedPrefix!');
       return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
     }
 
@@ -175,8 +157,6 @@ exports.publishToYouTube = async (req, res) => {
 
 // POST /api/publish/instagram
 exports.publishToInstagram = async (req, res) => {
-  // Debug: Log incoming req.user
-  console.log('[publishToInstagram] Incoming req.user:', req.user);
   try {
     // Enforce user-level access: s3Key must start with videos/{username}/
     const username = req.user && req.user.username ? req.user.username : null;
@@ -185,8 +165,6 @@ exports.publishToInstagram = async (req, res) => {
       return res.status(403).json({ error: "Unauthorized: You do not have permission to publish this video." });
     }
     const user = await User.findById(req.user.id);
-    // Debug: Log result of user lookup
-    console.log('[publishToInstagram] User lookup result:', user);
     if (!user || !user.facebookAccessToken) {
       return res.status(401).json({ error: "Instagram account not linked." });
     }

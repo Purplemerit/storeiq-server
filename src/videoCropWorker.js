@@ -56,13 +56,10 @@ async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
     const targetRatio = wRatio / hRatio;
     const inputRatio = width / height;
 
-    console.log('[VIDEO-CROP][ASPECT] Video dimensions:', { width, height, inputRatio });
-    console.log('[VIDEO-CROP][ASPECT] Target aspect ratio:', aspectRatio, 'targetRatio:', targetRatio);
 
     // Always apply crop filter unless aspect ratios match very closely
     if (Math.abs(inputRatio - targetRatio) < 0.01) {
       // Already matches, no filter needed
-      console.log('[VIDEO-CROP][ASPECT] Aspect ratio already matches, no crop needed');
       filter = null;
     } else if (inputRatio > targetRatio) {
       // Video is wider than target - crop width (left/right sides)
@@ -73,7 +70,6 @@ async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
       const x = Math.round((width - evenCropWidth) / 2);
       const evenX = x % 2 === 0 ? x : x - 1;
       filter = `crop=${evenCropWidth}:${height}:${evenX}:0`;
-      console.log('[VIDEO-CROP][ASPECT] Cropping width:', filter);
     } else {
       // Video is taller than target - crop height (top/bottom)
       const cropHeight = Math.round(width / targetRatio);
@@ -83,7 +79,6 @@ async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
       const y = Math.round((height - evenCropHeight) / 2);
       const evenY = y % 2 === 0 ? y : y - 1;
       filter = `crop=${width}:${evenCropHeight}:0:${evenY}`;
-      console.log('[VIDEO-CROP][ASPECT] Cropping height:', filter);
     }
   }
 
@@ -96,7 +91,6 @@ async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
     // Using -c copy would only cut at keyframes, causing imprecise cuts
     args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
     args.push(outputPath);
-    console.log('[VIDEO-CROP][FFMPEG] Running ffmpeg with args:', args.join(' '));
     execFile('ffmpeg', args, (err, stdout, stderr) => {
       // Write ffmpeg stderr to a log file for debugging
       try {
@@ -124,15 +118,6 @@ async function processCropJob(job) {
     }
     throw new Error('userId is required for export and must be present in crop job');
   }
-  console.log(`[VIDEO-CROP][WORKER] Processing crop job:`, {
-    jobId: job.jobId,
-    videoUrl: job.videoUrl,
-    s3Key: job.s3Key,
-    start: job.start,
-    end: job.end,
-    aspectRatio: job.aspectRatio,
-    userId: job.userId
-  });
   try {
     // Download video if videoUrl is provided
     if (job.videoUrl) {
@@ -173,23 +158,16 @@ async function processCropJob(job) {
       throw new Error('username is required for S3 upload and must be present in crop job');
     }
     const username = job.username.trim();
-    console.log(`[VIDEO-CROP][WORKER][UPLOAD] About to upload. userId:`, job.userId, 'username:', username, 'typeof:', typeof job.userId);
     const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId, username, { edited: "true" });
-    console.log(`[VIDEO-CROP][WORKER][UPLOAD] S3 upload result:`, { url, key });
     try {
       const updatedJob = await updateJob(String(job.jobId), { status: 'completed', downloadUrl: url, s3Key: key, error: null });
       if (!updatedJob) {
         console.warn(`[VIDEO-CROP][WORKER][ERROR] updateJob did not update any document for jobId: ${job.jobId}`);
       } else {
-        console.log(`[VIDEO-CROP][WORKER][SUCCESS] Updated job:`, updatedJob);
       }
     } catch (e) {
       console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to completed:', e);
     }
-    console.log(`[VIDEO-CROP][WORKER] Completed crop job:`, {
-      jobId: job.jobId,
-      downloadUrl: url
-    });
     fs.unlinkSync(outputPath);
     if (cleanupInput) fs.unlinkSync(inputPath);
   } catch (err) {
@@ -216,18 +194,6 @@ async function pollAndProcess() {
     jobs = [];
   }
   if (jobs.length > 0) {
-    console.log(`[VIDEO-CROP][WORKER] Found ${jobs.length} pending crop job(s)`);
-    jobs.forEach(j => {
-      console.log(`[VIDEO-CROP][WORKER][QUEUE] Pending job:`, {
-        jobId: j.jobId,
-        userId: j.userId,
-        videoUrl: j.videoUrl,
-        s3Key: j.s3Key,
-        start: j.start,
-        end: j.end,
-        status: j.status
-      });
-    });
   }
   for (const job of jobs) {
     try {
@@ -235,7 +201,6 @@ async function pollAndProcess() {
     } catch (e) {
       console.error('[VIDEO-CROP][WORKER][ERROR] Failed to update job status to processing:', e);
     }
-    console.log(`[VIDEO-CROP][WORKER] Set job to processing:`, { jobId: job.jobId });
     await processCropJob(job);
   }
 }
@@ -248,7 +213,6 @@ async function startWorker() {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log('[VIDEO-CROP][WORKER] Mongoose connected. Starting polling.');
     setInterval(pollAndProcess, 10000);
   } catch (err) {
     console.error('[VIDEO-CROP][WORKER] Failed to connect to MongoDB:', err);
@@ -266,5 +230,4 @@ const app = express();
 const PORT = process.env.PORT1 || 5001;
 app.get('/', (req, res) => res.send('Video Crop Worker running'));
 app.listen(PORT, () => {
-  console.log(`[VIDEO-CROP][WORKER] Dummy HTTP server listening on port ${PORT} (for Render Web Service requirement)`);
 });

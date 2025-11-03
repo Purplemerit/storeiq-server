@@ -108,7 +108,6 @@ class SchedulingService {
 
   async processScheduledPosts() {
     try {
-      console.log("Processing scheduled posts...");
       const now = new Date();
       // Find posts to process and include user data
       const postsToProcess = await ScheduledPost.find({
@@ -116,11 +115,9 @@ class SchedulingService {
         status: 'pending'
       }).populate('userId', '_id googleAccessToken').limit(10);
 
-      console.log(`Found ${postsToProcess.length} posts to process`);
 
       for (const post of postsToProcess) {
         try {
-          console.log(`Processing post ${post._id}`);
           
           if (!post.userId || !post.userId.googleAccessToken) {
             console.error(`User ${post.userId?._id} not found or no YouTube connection`);
@@ -132,7 +129,6 @@ class SchedulingService {
           }
 
           // Attempt to publish to YouTube
-          console.log(`Publishing video ${post.videoS3Key} to YouTube for user ${post.userId._id}...`);
           const videoId = await publishController.publishVideoToYouTube(
             post.userId._id.toString(),
             post.videoS3Key,
@@ -144,7 +140,6 @@ class SchedulingService {
             publishedVideoId: videoId
           });
 
-          console.log(`Successfully processed scheduled post ${post._id}`);
         } catch (error) {
           console.error(`Error processing post ${post._id}:`, error);
           await ScheduledPost.findByIdAndUpdate(post._id, {
@@ -161,7 +156,6 @@ class SchedulingService {
   // Ensure the processing job runs frequently
   ensureProcessingJob() {
     if (!global.schedulingInterval) {
-      console.log('Starting scheduling interval...');
       // Initial run
       this.processScheduledPosts().catch(error => {
         console.error('Initial scheduling run error:', error);

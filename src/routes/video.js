@@ -328,22 +328,6 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
     }
   }
 
-  console.log('[VIDEO-CROP][API] Incoming crop request:', {
-    videoUrl, s3Key, start, end, userId, username,
-    reqUser: req.user
-  });
-  
-  // Debug log to confirm username is present in crop job data
-  console.log('[VIDEO-CROP][API] Crop job data before creation:', {
-    type: 'crop',
-    videoUrl,
-    s3Key,
-    start,
-    end,
-    aspectRatio,
-    userId,
-    username
-  });
   
   if ((!videoUrl && !s3Key) || typeof start !== 'number' || typeof end !== 'number') {
     return res.status(400).json({ error: 'Missing or invalid videoUrl/s3Key, start, or end' });
@@ -361,17 +345,6 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
       aspectRatio,
       userId,
       username
-    });
-    console.log(`[VIDEO-CROP][API] Created crop job:`, {
-      jobId: job.jobId,
-      videoUrl: job.videoUrl,
-      s3Key: job.s3Key,
-      start: job.start,
-      end: job.end,
-      aspectRatio: job.aspectRatio,
-      userId: job.userId,
-      username: job.username,
-      status: job.status
     });
     res.json({ jobId: job.jobId, status: job.status });
   } catch (err) {

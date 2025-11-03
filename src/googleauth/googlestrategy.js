@@ -44,14 +44,6 @@ passport.use(
         
         await user.save();
 
-        // Log token storage for debugging
-        console.log('[GoogleStrategy] Updated user tokens:', {
-          userId: user._id,
-          hasAccessToken: !!user.googleAccessToken,
-          hasRefreshToken: !!user.googleRefreshToken
-        });
-
-        // 🚀 Passport passes the user back here
         return done(null, user);
       } catch (err) {
         return done(err, null);

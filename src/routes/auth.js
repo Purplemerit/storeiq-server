@@ -197,11 +197,7 @@ router.patch("/password", authMiddleware, async (req, res) => {
  */
 router.post("/link-youtube", authMiddleware, async (req, res) => {
   try {
-    // Debug logging
-    console.log("[LINK YOUTUBE] req.body:", req.body);
-    const { accessToken, refreshToken } = req.body;
-    console.log("[LINK YOUTUBE] accessToken:", accessToken);
-    console.log("[LINK YOUTUBE] refreshToken:", refreshToken);
+  const { accessToken, refreshToken } = req.body;
 
     if (typeof accessToken !== "string" || !accessToken) {
       return res.status(400).json({ error: "Missing or invalid accessToken" });
@@ -226,8 +222,6 @@ router.post("/link-youtube", authMiddleware, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Log the full updated user document, including googleAccessToken
-    console.log("[LINK YOUTUBE] Updated user:", user);
 
     res.json({ message: "YouTube tokens linked successfully" });
   } catch (err) {
