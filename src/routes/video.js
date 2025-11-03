@@ -88,16 +88,22 @@ const isBase64 = str =>
   /^([A-Za-z0-9+/=]+\s*)+$/.test(str.replace(/^data:video\/mp4;base64,/, ''));
 
 router.post('/generate-video', authMiddleware, async (req, res) => {
-  const { script, config } = req.body;
+  const { script, quality, voiceSpeed } = req.body;
 
-  if (typeof script !== 'string' || !config || typeof config !== 'object') {
-    return res.status(400).json({ error: 'Missing or invalid script/config' });
+  if (typeof script !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid script' });
   }
 
   const userId = req.user && req.user._id ? req.user._id.toString() : null;
   if (!userId) {
     return res.status(401).json({ error: 'User authentication required to generate video' });
   }
+
+  // Build config for video generation
+  const config = {
+    ...(quality ? { quality } : {}),
+    ...(voiceSpeed ? { voiceSpeed } : {}),
+  };
 
   try {
     const result = await generateVideo(script, config);
