@@ -6,7 +6,7 @@ const schedulingService = require('../services/schedulingService');
 // POST /api/schedule/video - Schedule a video for publishing
 router.post('/video', authMiddleware, async (req, res) => {
   try {
-    const { videoS3Key, scheduledTime, timezone = 'UTC' } = req.body;
+    const { videoS3Key, scheduledTime, timezone = 'UTC', metadata = {} } = req.body;
 
     // Validate required fields
     if (!videoS3Key || !scheduledTime) {
@@ -24,7 +24,8 @@ router.post('/video', authMiddleware, async (req, res) => {
       req.user._id, // Changed from req.user.id to req.user._id
       videoS3Key,
       scheduledTime,
-      timezone
+      timezone,
+      metadata
     );
 
     return res.status(200).json({

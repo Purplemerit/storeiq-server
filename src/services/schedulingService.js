@@ -54,8 +54,8 @@ class SchedulingService {
         userTimezone: timezone,
         platform: 'youtube',
         status: 'pending',
-        title: metadata.title,
-        description: metadata.description,
+        title: metadata.title || 'Untitled Video',
+        description: metadata.description || '',
         metadata: new Map(Object.entries(metadata))
       });
 

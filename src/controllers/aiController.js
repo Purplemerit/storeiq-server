@@ -63,7 +63,10 @@ async function getUserVideos(req, res) {
     const videos = await listUserVideosFromS3(userId, username || '');
   // Fetch all MongoDB video records for this user
   const Video = require('../models/Video');
+  const ScheduledPost = require('../models/ScheduledPost');
   const mongoVideos = await Video.find({ owner: userId });
+    const scheduledPosts = await ScheduledPost.find({ userId: userId });
+    
     // For each video, generate a signed URL and merge MongoDB metadata if available
     const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
     const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -82,6 +85,9 @@ async function getUserVideos(req, res) {
         }
         // Find MongoDB metadata for this s3Key
         const meta = mongoVideos.find(mv => mv.s3Key === v.key);
+        // Find scheduling info for this s3Key
+        const scheduledPost = scheduledPosts.find(sp => sp.videoS3Key === v.key);
+        
         return {
           id: v.key,
           s3Key: v.key,
@@ -93,6 +99,8 @@ async function getUserVideos(req, res) {
           isEdited: v.isEdited || false,
           publishCount: meta && typeof meta.publishCount === 'number' ? meta.publishCount : 0,
           publishedToYouTube: meta && typeof meta.publishedToYouTube === 'boolean' ? meta.publishedToYouTube : false,
+          scheduledTime: scheduledPost ? scheduledPost.scheduledTime : null,
+          scheduledStatus: scheduledPost ? scheduledPost.status : null,
         };
       })
     );
