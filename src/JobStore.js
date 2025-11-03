@@ -9,6 +9,7 @@ const JobSchema = new mongoose.Schema({
   s3Key: { type: String },
   start: { type: Number },
   end: { type: Number },
+  aspectRatio: { type: String },
   userId: { type: String },
   username: { type: String },
   status: { type: String, default: 'pending' },

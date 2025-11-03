@@ -368,6 +368,7 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
       s3Key: job.s3Key,
       start: job.start,
       end: job.end,
+      aspectRatio: job.aspectRatio,
       userId: job.userId,
       username: job.username,
       status: job.status

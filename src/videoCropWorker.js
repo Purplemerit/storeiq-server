@@ -56,17 +56,34 @@ async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
     const targetRatio = wRatio / hRatio;
     const inputRatio = width / height;
 
+    console.log('[VIDEO-CROP][ASPECT] Video dimensions:', { width, height, inputRatio });
+    console.log('[VIDEO-CROP][ASPECT] Target aspect ratio:', aspectRatio, 'targetRatio:', targetRatio);
+
+    // Always apply crop filter unless aspect ratios match very closely
     if (Math.abs(inputRatio - targetRatio) < 0.01) {
       // Already matches, no filter needed
+      console.log('[VIDEO-CROP][ASPECT] Aspect ratio already matches, no crop needed');
       filter = null;
     } else if (inputRatio > targetRatio) {
-      // Crop width
+      // Video is wider than target - crop width (left/right sides)
       const cropWidth = Math.round(height * targetRatio);
-      filter = `crop=${cropWidth}:${height}`;
+      // Ensure even dimensions for x264 encoding
+      const evenCropWidth = cropWidth % 2 === 0 ? cropWidth : cropWidth - 1;
+      // Center the crop horizontally
+      const x = Math.round((width - evenCropWidth) / 2);
+      const evenX = x % 2 === 0 ? x : x - 1;
+      filter = `crop=${evenCropWidth}:${height}:${evenX}:0`;
+      console.log('[VIDEO-CROP][ASPECT] Cropping width:', filter);
     } else {
-      // Crop height
+      // Video is taller than target - crop height (top/bottom)
       const cropHeight = Math.round(width / targetRatio);
-      filter = `crop=${width}:${cropHeight}`;
+      // Ensure even dimensions for x264 encoding
+      const evenCropHeight = cropHeight % 2 === 0 ? cropHeight : cropHeight - 1;
+      // Center the crop vertically
+      const y = Math.round((height - evenCropHeight) / 2);
+      const evenY = y % 2 === 0 ? y : y - 1;
+      filter = `crop=${width}:${evenCropHeight}:0:${evenY}`;
+      console.log('[VIDEO-CROP][ASPECT] Cropping height:', filter);
     }
   }
 
@@ -74,10 +91,10 @@ async function cropWithFfmpeg(inputPath, outputPath, start, end, aspectRatio) {
     const args = [...baseArgs];
     if (filter) {
       args.push('-vf', filter);
-      args.push('-c:v', 'libx264', '-c:a', 'copy');
-    } else {
-      args.push('-c', 'copy');
     }
+    // Always re-encode to ensure accurate trimming at exact timestamps
+    // Using -c copy would only cut at keyframes, causing imprecise cuts
+    args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
     args.push(outputPath);
     console.log('[VIDEO-CROP][FFMPEG] Running ffmpeg with args:', args.join(' '));
     execFile('ffmpeg', args, (err, stdout, stderr) => {
@@ -113,6 +130,7 @@ async function processCropJob(job) {
     s3Key: job.s3Key,
     start: job.start,
     end: job.end,
+    aspectRatio: job.aspectRatio,
     userId: job.userId
   });
   try {
