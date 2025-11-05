@@ -65,36 +65,31 @@ router.get('/summary', authMiddleware, async (req, res) => {
           title: "AI Videos Generated",
           value: totalAIVideos,
           change: "",
-          changeType: "positive",
-          comparison: "vs previous"
+          changeType: "positive"
         },
         {
           title: "AI Images Generated",
           value: totalAIImages,
           change: "",
-          changeType: "positive",
-          comparison: "vs previous"
+          changeType: "positive"
         },
         {
           title: "Scripts Generated",
           value: totalVideos,
           change: "",
-          changeType: "positive",
-          comparison: "vs previous"
+          changeType: "positive"
         },
         {
           title: "Videos Published to YouTube",
           value: publishedCount,
           change: "",
-          changeType: "positive",
-          comparison: "vs previous"
+          changeType: "positive"
         },
         {
           title: "Videos Published to Instagram",
           value: 0,
           change: "",
-          changeType: "positive",
-          comparison: "vs previous"
+          changeType: "positive"
         }
       ]
     });
