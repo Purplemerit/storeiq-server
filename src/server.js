@@ -6,6 +6,7 @@ const cors = require("cors");
 const aiRoutes = require("./routes/ai");
 const youtubeRoutes = require('./youtube/youtubeRoutes');
 const scheduleRoutes = require('./routes/schedule');
+const veoRoutes = require('./routes/veo');  // Veo-3 video generation routes
 const videoTTSRoutes = require("../src/ai-tools/text-audio");
 const videoMountingRoutes = require("../src/ai-tools/videoMounting");
 const uploadAudioRoutes = require("./ai-tools/uploadAudio");
@@ -98,6 +99,7 @@ app.use(passport.initialize()); // no sessions
 
 // Mount routes
 app.use("/api/ai", aiRoutes);
+app.use("/api/veo", veoRoutes);  // Veo-3 video generation API
 app.use("/api", routes);
 app.use("/auth", googleRoutes);
 app.use("/auth", githubRoutes);

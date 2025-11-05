@@ -1,0 +1,164 @@
+┌─────────────────────────────────────────────────────────────────────────┐
+│                 GEMINI vs VEO - QUICK REFERENCE                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────┬─────────────────────┬─────────────────────────┐
+│      FEATURE           │      GEMINI         │         VEO             │
+├────────────────────────┼─────────────────────┼─────────────────────────┤
+│ Purpose                │ Text/Chat/Images    │ Video Generation        │
+│                        │                     │                         │
+│ API Endpoint           │ generativelanguage  │ aiplatform.googleapis   │
+│                        │ .googleapis.com     │ .com (Vertex AI)        │
+│                        │                     │                         │
+│ Authentication         │ ✓ API Key           │ ✗ API Key               │
+│                        │                     │ ✓ OAuth 2.0             │
+│                        │                     │ ✓ Service Account       │
+│                        │                     │                         │
+│ Request Format         │ contents: [{        │ instances: [{           │
+│                        │   parts: [...]      │   prompt: "..."         │
+│                        │ }]                  │ }]                      │
+│                        │                     │                         │
+│ Response Type          │ Immediate (sync)    │ Long-running operation  │
+│                        │                     │ (async)                 │
+│                        │                     │                         │
+│ Required Config        │ GEMINI_API_KEY      │ GCP_PROJECT_ID          │
+│                        │                     │ GCP_LOCATION            │
+│                        │                     │ GOOGLE_APPLICATION_     │
+│                        │                     │ CREDENTIALS             │
+│                        │                     │                         │
+│ Setup Complexity       │ Easy (just API key) │ Complex (GCP account,   │
+│                        │                     │ service account, IAM)   │
+│                        │                     │                         │
+│ Cost                   │ Low                 │ High                    │
+│                        │                     │                         │
+│ Status Polling         │ Not needed          │ Required                │
+└────────────────────────┴─────────────────────┴─────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         EXAMPLE COMPARISON                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─── GEMINI (Text Generation) ────────────────────────────────────────────┐
+│                                                                          │
+│  const response = await axios.post(                                     │
+│    `https://generativelanguage.googleapis.com/v1beta/                   │
+│     models/gemini-2.5-flash:generateContent?key=${API_KEY}`,            │
+│    {                                                                     │
+│      contents: [{ parts: [{ text: "Write a story" }] }]                 │
+│    }                                                                     │
+│  );                                                                      │
+│                                                                          │
+│  const text = response.data.candidates[0].content.parts[0].text;        │
+│  console.log(text); // ✓ Immediate response                             │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─── VEO (Video Generation) ──────────────────────────────────────────────┐
+│                                                                          │
+│  // Step 1: Get OAuth token                                             │
+│  const auth = new GoogleAuth({                                          │
+│    keyFilename: './service-account-key.json',                           │
+│    scopes: ['https://www.googleapis.com/auth/cloud-platform']           │
+│  });                                                                     │
+│  const client = await auth.getClient();                                 │
+│  const token = await client.getAccessToken();                           │
+│                                                                          │
+│  // Step 2: Start video generation                                      │
+│  const response = await axios.post(                                     │
+│    `https://us-central1-aiplatform.googleapis.com/v1/                   │
+│     projects/${PROJECT_ID}/locations/us-central1/                       │
+│     publishers/google/models/veo-3.0-generate-preview:                  │
+│     predictLongRunning`,                                                │
+│    {                                                                     │
+│      instances: [{ prompt: "A cat playing piano" }],                    │
+│      parameters: { aspectRatio: '16:9', duration: 5 }                   │
+│    },                                                                    │
+│    {                                                                     │
+│      headers: {                                                          │
+│        'Authorization': `Bearer ${token.token}`,                        │
+│        'Content-Type': 'application/json'                               │
+│      }                                                                   │
+│    }                                                                     │
+│  );                                                                      │
+│                                                                          │
+│  const operationName = response.data.name;                              │
+│  // ⚠️ Not immediate! Need to poll for completion                       │
+│                                                                          │
+│  // Step 3: Poll for completion                                         │
+│  let status;                                                             │
+│  do {                                                                    │
+│    await sleep(5000);                                                    │
+│    status = await getOperationStatus(operationName);                    │
+│  } while (!status.done);                                                │
+│                                                                          │
+│  console.log('Video URL:', status.response.generatedVideo.uri);         │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      COMMON MISTAKES                                    │
+└─────────────────────────────────────────────────────────────────────────┘
+
+❌ Using generativelanguage.googleapis.com for Veo
+   ➜ Use aiplatform.googleapis.com instead
+
+❌ Using API key for Veo authentication
+   ➜ Use Service Account with OAuth 2.0
+
+❌ Expecting immediate video response
+   ➜ Poll the long-running operation
+
+❌ Using Gemini request format for Veo
+   ➜ Use Vertex AI format with instances/parameters
+
+❌ Forgetting to enable Vertex AI API
+   ➜ Enable in GCP Console
+
+❌ Missing IAM permissions
+   ➜ Grant roles/aiplatform.user to service account
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      QUICK SETUP GUIDE                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+For GEMINI:
+  1. Get API key from https://makersuite.google.com/app/apikey
+  2. Add to .env: GEMINI_API_KEY=AIzaSy...
+  3. Done! ✓
+
+For VEO:
+  1. Create GCP project
+  2. Enable Vertex AI API
+  3. Create service account
+  4. Grant role: Vertex AI User
+  5. Download JSON key
+  6. Add to .env:
+     GCP_PROJECT_ID=your-project
+     GCP_LOCATION=us-central1
+     GOOGLE_APPLICATION_CREDENTIALS=./config/service-account-key.json
+  7. Store key file securely
+  8. Test with: node src/geminiService.js
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      WHEN TO USE WHICH?                                 │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Use GEMINI when:
+  ✓ Generating text/scripts
+  ✓ Chatbots and Q&A
+  ✓ Content summarization
+  ✓ Simple image generation (Imagen)
+  ✓ Quick prototyping
+  ✓ Low budget projects
+
+Use VEO when:
+  ✓ Generating videos
+  ✓ You have GCP infrastructure
+  ✓ Need production-grade video generation
+  ✓ Have budget for video AI
+  ✓ Building video-centric apps
+
+Can combine both:
+  1. Use Gemini to generate video script
+  2. Use Veo to generate video from script
+  3. Use Gemini to generate video description
