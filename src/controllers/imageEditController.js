@@ -135,29 +135,36 @@ async function editImage(req, res) {
     const imageBase64 = imageBuffer.toString('base64');
 
     // Use Imagen 3 model for image editing with instruct customization
-    // imagegeneration@006 supports both generation and editing with edit mode
-    const imagenModel = "imagegeneration@006";
+    // imagen-3.0-capability-002 supports instruct-based editing with REFERENCE_TYPE_RAW
+    const imagenModel = "imagen-3.0-capability-001";
     const location = "us-central1";
     const vertexApiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${imagenModel}:predict`;
 
     console.log('Editing image with Imagen 3...');
     console.log('Prompt:', prompt);
 
-    // Build request for image editing with base image
-    // Using edit mode with prompt-based instructions
+    // Build request for instruct-based image editing using REFERENCE_TYPE_RAW
+    // The prompt should reference the image using [1] if needed, or describe the transformation
+    // Example: "Transform the subject in image [1] to have darker skin tone"
+    const enhancedPrompt = `Transform the image [1]: ${prompt}`;
+    
     const requestBody = {
       instances: [
         {
-          prompt: prompt,
-          image: {
-            bytesBase64Encoded: imageBase64
-          }
+          prompt: enhancedPrompt,
+          referenceImages: [
+            {
+              referenceType: "REFERENCE_TYPE_RAW",
+              referenceId: 1,
+              referenceImage: {
+                bytesBase64Encoded: imageBase64
+              }
+            }
+          ]
         }
       ],
       parameters: {
-        sampleCount: 1,
-        mode: "edit", // Explicitly set edit mode
-        editMode: "inpainting-insert" // Use inpainting for general edits
+        sampleCount: 1
       }
     };
 
