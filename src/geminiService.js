@@ -20,13 +20,7 @@ const VEO_MODEL_TYPE = process.env.VEO_MODEL_TYPE || 'standard';
 // Note: Not all models are available in all regions
 const VEO_MODELS = {
   standard: 'veo-3.0-generate-001',            // GA version (General Availability) - CORRECT MODEL NAME
-  ga: 'veo-3.0-generate-001',                  // Alias for standard (GA version)
-  preview: 'veo-3.0-generate-preview',         // Preview version (may not work)
-  // The following models may not be available in all regions:
-  fast: 'veo-3.0-fast-preview',                // Fast generation (limited availability)
-  v2: 'veo-2.0-generate',                      // Older version (limited availability)
-  v3: 'veo-3.0-generate',                      // Alternative naming (limited availability)
-  // Add more models as they become available
+  fast: 'veo-3.0-fast-generate-001',                // Fast generation (limited availability)
 };
 
 // Select the model based on configuration
@@ -86,7 +80,6 @@ async function listModels(apiKey = GEMINI_API_KEY) {
       `${GEMINI_LIST_MODELS_URL}?key=${apiKey}`
     );
     const models = response.data.models || [];
-    console.log('Available Gemini models:', models.map(m => m.name).join(', '));
     return models;
   } catch (err) {
     console.error('Error fetching models:', err.response?.data?.error?.message || err.message);
@@ -147,7 +140,6 @@ function improvePromptForVeo(prompt) {
   for (const [concept, visualization] of Object.entries(abstractConcepts)) {
     if (lowerImproved.includes(concept)) {
       improved = improved.toLowerCase().replace(concept, visualization);
-      console.log(`💡 Converted abstract concept "${concept}" to visual description`);
       break;
     }
   }
@@ -204,13 +196,7 @@ async function checkGCSAccess(bucketUri) {
     
     return true;
   } catch (err) {
-    console.error('⚠ GCS bucket access check failed:', err.response?.status, err.response?.statusText);
-    if (err.response?.status === 403) {
-      console.error('   → Service account lacks permissions to bucket');
-      console.error('   → Grant "Storage Object Creator" role to your service account');
-    } else if (err.response?.status === 404) {
-      console.error('   → Bucket not found or not accessible');
-    }
+    console.error('GCS bucket access check failed:', err.response?.status, err.response?.statusText);
     return false;
   }
 }
@@ -253,11 +239,7 @@ function sanitizePrompt(prompt) {
   }
   
   if (hasAbstractPattern) {
-    console.warn('⚠ Warning: Prompt contains meta-instructions (e.g., "create a video about...")');
-    console.warn('   Veo works best with direct visual descriptions.');
-    console.warn('   Example: Instead of "Create a video about a sunset"');
-    console.warn('            Use: "A golden sunset over calm ocean waters, seagulls flying"');
-    console.warn('   Continuing with original prompt, but this may cause error code 13...');
+    console.warn('⚠ Warning: Prompt contains meta-instructions. Use direct visual descriptions instead.');
   }
   
   return text;
@@ -300,29 +282,14 @@ async function generateVideo(prompt, videoConfig = {}) {
     if (videoConfig.autoImprovePrompt !== false) {  // Default is true
       const improvedPrompt = improvePromptForVeo(sanitizedPrompt);
       if (improvedPrompt !== sanitizedPrompt) {
-        console.log('📝 Original prompt:', sanitizedPrompt);
-        console.log('📝 Improved prompt:', improvedPrompt);
         sanitizedPrompt = improvedPrompt;
       }
     }
-    
-    console.log('Using prompt:', sanitizedPrompt.substring(0, 100) + (sanitizedPrompt.length > 100 ? '...' : ''));
     
     // Generate a unique output path in GCS if not provided
     const timestamp = Date.now();
     const outputStorageUri = videoConfig.storageUri || 
       (process.env.GCS_OUTPUT_BUCKET ? `gs://${process.env.GCS_OUTPUT_BUCKET}/veo-outputs/${timestamp}/` : null);
-    
-    // Check GCS bucket access if storage URI is provided
-    if (outputStorageUri) {
-      const hasAccess = await checkGCSAccess(outputStorageUri);
-      if (!hasAccess) {
-        console.warn('⚠ Warning: GCS bucket may not be accessible. This could cause error code 13.');
-        console.warn('   Continuing anyway, but if you get error 13, check bucket permissions.');
-      } else {
-        console.log('✓ GCS bucket access verified');
-      }
-    }
     
     // Get OAuth 2.0 access token
     const accessToken = await getAccessToken();
@@ -365,15 +332,6 @@ async function generateVideo(prompt, videoConfig = {}) {
       payload.parameters.generateAudio = videoConfig.generateAudio;
     }
 
-    console.log('Veo-3 API Request:', {
-      url: apiUrl,
-      model: selectedModel,
-      modelType: modelType,
-      method: 'POST',
-      authType: 'OAuth 2.0 Bearer Token',
-      payload: JSON.stringify(payload, null, 2)
-    });
-
     // Make authenticated request to Vertex AI
     const response = await axios.post(
       apiUrl,
@@ -386,9 +344,6 @@ async function generateVideo(prompt, videoConfig = {}) {
       }
     );
 
-    console.log('Veo-3 API Response Status:', response.status);
-    console.log('Veo-3 API Response Data:', JSON.stringify(response.data, null, 2));
-
     // Veo returns a long-running operation
     // Response format: { name: 'projects/.../operations/...' }
     const operationName = response.data?.name;
@@ -397,8 +352,6 @@ async function generateVideo(prompt, videoConfig = {}) {
       console.error('Veo-3 API response:', JSON.stringify(response.data, null, 2));
       throw new Error('No operation name returned from Veo-3');
     }
-
-    console.log('✓ Operation started:', operationName);
 
     // Return operation info - caller should poll for completion
     return {
@@ -410,18 +363,6 @@ async function generateVideo(prompt, videoConfig = {}) {
     };
 
   } catch (err) {
-    // Detailed error logging
-    if (err.response) {
-      console.error('Veo-3 API Error Response:', {
-        status: err.response.status,
-        statusText: err.response.statusText,
-        data: JSON.stringify(err.response.data, null, 2),
-        headers: JSON.stringify(err.response.headers, null, 2)
-      });
-    } else {
-      console.error('Veo-3 API error (no response):', err.message);
-    }
-
     // Handle specific error cases
     if (err.response?.status === 403) {
       return {
@@ -434,9 +375,8 @@ async function generateVideo(prompt, videoConfig = {}) {
     if (err.response?.status === 404) {
       return {
         mock: true,
-        message: `Veo model "${selectedModel}" not available in region "${GCP_LOCATION}". The model may not be enabled or not supported in this region. Try using "standard" model or check Model Garden for available models.`,
-        videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
-        suggestion: 'Use VEO_MODEL_TYPE=standard in .env or enable the model in Model Garden'
+        message: `Veo model "${selectedModel}" not available in region "${GCP_LOCATION}". The model may not be enabled or not supported in this region.`,
+        videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4'
       };
     }
 
@@ -466,8 +406,6 @@ async function getVideoOperationStatus(operationName) {
     // We need to POST to the model's fetchPredictOperation endpoint with the operation name
     const fetchUrl = `https://${GCP_LOCATION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_LOCATION}/publishers/google/models/veo-3.0-generate-preview:fetchPredictOperation`;
 
-    console.log('Polling operation via fetchPredictOperation');
-
     const response = await axios.post(fetchUrl, {
       operationName: operationName
     }, {
@@ -478,14 +416,12 @@ async function getVideoOperationStatus(operationName) {
     });
 
     const operation = response.data;
-    console.log('Operation status:', operation.done ? 'COMPLETED' : 'PROCESSING');
 
     // Check if operation is complete
     if (operation.done) {
       // Success case - check for response with videos array (official format from documentation)
       if (operation.response && operation.response.videos) {
         const videos = operation.response.videos.map((video, index) => {
-          console.log(`Processing video ${index + 1}:`, Object.keys(video));
           return {
             url: video.gcsUri,
             mimeType: video.mimeType || 'video/mp4',
@@ -506,8 +442,6 @@ async function getVideoOperationStatus(operationName) {
         
         // Extract video data from predictions
         const videos = predictions.map((prediction, index) => {
-          console.log(`Processing prediction ${index + 1}:`, Object.keys(prediction));
-          
           // Check if video is in Cloud Storage (gcsUri)
           if (prediction.gcsUri) {
             return {
@@ -536,7 +470,6 @@ async function getVideoOperationStatus(operationName) {
         }).filter(v => v !== null);
 
         if (videos.length === 0) {
-          console.error('No video data found in predictions:', JSON.stringify(predictions, null, 2));
           throw new Error('No video data in completed operation response');
         }
 
@@ -549,23 +482,14 @@ async function getVideoOperationStatus(operationName) {
       
       // Error case
       if (operation.error) {
-        console.error('Operation failed with error:', JSON.stringify(operation.error, null, 2));
-        
         // Provide helpful error messages based on error code
         let errorMessage = operation.error.message || JSON.stringify(operation.error);
         let suggestion = '';
         
         if (operation.error.code === 13) {
-          suggestion = 'Internal error from Veo API. This could be due to:\n' +
-            '  1. Content policy violation - Try simplifying or modifying your prompt\n' +
-            '  2. Model availability issues in the region - Try a different region (e.g., us-east4, europe-west4)\n' +
-            '  3. GCS bucket permissions - Ensure the service account has write access to the output bucket\n' +
-            '  4. Temporary service issue - Retry the request after a few minutes';
+          suggestion = 'Internal error from Veo API. Possible causes: content policy violation, model availability, or GCS bucket permissions.';
         } else if (operation.error.code === 7) {
-          suggestion = 'Permission denied. Ensure your service account has:\n' +
-            '  - roles/aiplatform.user\n' +
-            '  - roles/storage.objectCreator (for GCS bucket)\n' +
-            '  - Vertex AI API enabled';
+          suggestion = 'Permission denied. Ensure service account has roles/aiplatform.user and roles/storage.objectCreator.';
         } else if (operation.error.code === 3) {
           suggestion = 'Invalid argument. Check your prompt and video configuration parameters.';
         }
@@ -596,12 +520,7 @@ async function getVideoOperationStatus(operationName) {
 
   } catch (err) {
     if (err.response?.status === 404) {
-      console.error('❌ Operation not found (404). Possible reasons:');
-      console.error('   1. Operation was created in a different region');
-      console.error('   2. Operation ID is malformed');
-      console.error('   3. Operation has expired');
-      console.error('   Operation name:', operationName);
-      console.error('   Expected URL:', `https://${GCP_LOCATION}-aiplatform.googleapis.com/v1/${operationName}`);
+      console.error('Operation not found (404):', operationName);
     }
     console.error('Error polling Veo-3 operation:', err.response?.data || err.message);
     throw new Error('Failed to get operation status: ' + (err.response?.data?.error?.message || err.message));
@@ -634,9 +553,6 @@ async function generateVideoAndWait(prompt, videoConfig = {}, options = {}) {
   for (let retry = 0; retry <= maxRetries; retry++) {
     if (retry > 0) {
       const strategy = retryStrategies[Math.min(retry, retryStrategies.length - 1)];
-      console.log(`\n⟳ Retry attempt ${retry}/${maxRetries} with strategy: ${strategy.name}`);
-      console.log(`   Config:`, JSON.stringify(strategy.config));
-      console.log(`   Waiting ${retryDelay/1000}s before retry...`);
       await new Promise(resolve => setTimeout(resolve, retryDelay));
       
       // Apply retry strategy
@@ -652,23 +568,13 @@ async function generateVideoAndWait(prompt, videoConfig = {}, options = {}) {
         return result;
       }
       
-      console.log('Video generation started. Operation:', result.operationName);
-      console.log('Polling for completion...');
-      
       // Poll for completion
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         await new Promise(resolve => setTimeout(resolve, pollInterval));
         
         const status = await getVideoOperationStatus(result.operationName);
         
-        const progressStr = status.progress ? ` (${status.progress}%)` : '';
-        process.stdout.write(`\rAttempt ${attempt}/${maxAttempts} - Status: ${status.status}${progressStr}     `);
-        
         if (status.status === 'COMPLETED') {
-          console.log('\n✓ Video generation completed!');
-          if (retry > 0) {
-            console.log(`✓ Success after ${retry} retries using strategy: ${retryStrategies[Math.min(retry, retryStrategies.length - 1)].name}`);
-          }
           return {
             ...result,
             ...status,
@@ -679,57 +585,15 @@ async function generateVideoAndWait(prompt, videoConfig = {}, options = {}) {
         }
         
         if (status.status === 'FAILED') {
-          console.log('\n✗ Video generation failed');
-          
           // Check if error is retryable (code 13 = internal error)
           if (status.errorCode === 13 && retry < maxRetries) {
-            console.log(`⚠ Internal error detected (code 13). Will retry with different configuration...`);
-            if (status.suggestion) {
-              console.log('\nSuggestion:', status.suggestion);
-            }
             lastError = status;
             break; // Break inner loop to retry
           }
           
           // Non-retryable error or max retries reached
-          if (retry >= maxRetries && status.errorCode === 13) {
-            // Provide detailed troubleshooting for persistent error 13
-            const troubleshootingMsg = `
-Video generation failed after ${maxRetries + 1} attempts with persistent error code 13.
-
-This error typically indicates one of the following issues:
-
-1. **Content Policy Issue**: Your prompt may be triggering safety filters
-   → Try: "${sanitizePrompt(prompt).substring(0, 50)}..." seems safe, but try even simpler prompts
-   → Example: "A calm ocean scene" or "Green forest landscape"
-
-2. **GCS Bucket Access Issue**: Service account may lack permissions
-   → Bucket: ${videoConfig.storageUri || process.env.GCS_OUTPUT_BUCKET}
-   → Check: Service account has 'storage.objectCreator' role
-   → Verify: gsutil ls ${videoConfig.storageUri || 'gs://' + process.env.GCS_OUTPUT_BUCKET}
-
-3. **Regional Availability**: Model may not be fully operational in ${GCP_LOCATION}
-   → Try regions: us-east4, europe-west4, asia-southeast1
-   → Update: Set GCP_LOCATION in your .env file
-
-4. **Model Access Issue**: Veo model may not be enabled for your project
-   → Check: https://console.cloud.google.com/vertex-ai/model-garden
-   → Enable: Search for "Veo 3" and enable it
-
-5. **Quota Issue**: You may have hit quota limits
-   → Check: https://console.cloud.google.com/iam-admin/quotas?q=vertex
-
-Tried configurations:
-${retryStrategies.slice(0, retry + 1).map((s, i) => `  ${i + 1}. ${s.name}: ${JSON.stringify(s.config)}`).join('\n')}
-
-Recommendation: Check GCS bucket permissions first, as this is the most common cause.
-`;
-            throw new Error(troubleshootingMsg);
-          }
-          
-          // Non-retryable error or max retries reached
           const errorMsg = status.suggestion 
-            ? `${status.error}\n\nSuggestion: ${status.suggestion}`
+            ? `${status.error}\n\n${status.suggestion}`
             : status.error;
           throw new Error(`Video generation failed: ${errorMsg}`);
         }
@@ -802,24 +666,11 @@ module.exports = {
   listModels 
 };
 
-// TEMP: Log available Gemini models at startup for debugging
+// Configuration debugging (only runs when executed directly)
 if (require.main === module) {
-  console.log('\n=== Gemini Service Configuration ===');
-  console.log('GEMINI_API_KEY:', GEMINI_API_KEY ? '✓ Set' : '✗ Not set');
-  console.log('GCP_PROJECT_ID:', GCP_PROJECT_ID || '✗ Not set (required for Veo)');
-  console.log('GCP_LOCATION:', GCP_LOCATION);
-  console.log('VEO_MODEL_TYPE:', VEO_MODEL_TYPE, `(${VEO_MODEL})`);
-  console.log('GOOGLE_APPLICATION_CREDENTIALS:', GOOGLE_APPLICATION_CREDENTIALS ? '✓ Set' : '✗ Not set (required for Veo)');
-  console.log('Veo API URL:', VEO3_API_URL || '✗ Not configured');
-  console.log('Google Auth:', googleAuth ? '✓ Initialized' : '✗ Not initialized');
-  console.log('====================================\n');
-
   // List available Gemini models
   listModels(GEMINI_API_KEY)
-    .then(models => {
-      console.log('✓ Gemini API Key is valid');
-    })
     .catch(err => {
-      console.error('✗ Gemini API Key error:', err.message);
+      console.error('Gemini API Key error:', err.message);
     });
 }
