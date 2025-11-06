@@ -411,7 +411,7 @@ router.post('/register-video', authMiddleware, async (req, res) => {
   try {
     const userId = req.user && req.user._id ? req.user._id.toString() : null;
     if (!userId) return res.status(401).json({ error: 'User authentication required' });
-    const { s3Key, title, description } = req.body;
+    const { s3Key, title, description, prompt, provider } = req.body;
     if (!s3Key) return res.status(400).json({ error: 'Missing s3Key' });
     // Check if already exists
     let video = await Video.findOne({ s3Key });
@@ -421,6 +421,8 @@ router.post('/register-video', authMiddleware, async (req, res) => {
         owner: userId,
         title: title || '',
         description: description || '',
+        prompt: prompt || '',
+        provider: provider || '',
       });
       await video.save();
     }

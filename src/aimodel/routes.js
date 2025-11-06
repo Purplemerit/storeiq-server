@@ -5,7 +5,7 @@ const axios = require("axios");
 const { generateVideoAndWait, downloadVideoFromGCS, generateFilenameFromPrompt } = require("../geminiService.js");
 const verifyJWT = require("../routes/authMiddleware.js");
 const { uploadVideoBuffer } = require("../s3Service.js");
-// const GeneratedVideo = require("../models/GeneratedVideo"); // if you have this model
+const Video = require("../models/Video");
 
 /**
  * POST /api/gemini-veo3/generate-video
@@ -117,6 +117,19 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
       s3Key = uploadResult.key || uploadResult.s3Key;
     }
 
+    // Save video metadata to database
+    console.log('[Veo-3] Saving video metadata to database...');
+    const videoDoc = new Video({
+      s3Key: s3Key,
+      owner: userId,
+      title: customFilename || 'AI Generated Video',
+      prompt: prompt,
+      provider: 'gemini-veo-3',
+      description: `Generated with ${resolution} resolution`,
+    });
+    await videoDoc.save();
+    console.log('[Veo-3] Video metadata saved to database');
+
     console.log('[Veo-3] ✓ Video generation and upload successful');
 
     return res.json({
@@ -173,8 +186,20 @@ router.post("/generate-video", verifyJWT, async (req, res) => {
       "video/mp4",
       userId,
       username,
-      { generated: "true" }
+      { generated: "true", prompt: prompt.substring(0, 200) }
     );
+
+    // Save video metadata to database
+    console.log('[Gemini-VEO] Saving video metadata to database...');
+    const videoDoc = new Video({
+      s3Key: key,
+      owner: userId,
+      title: 'AI Generated Video',
+      prompt: prompt,
+      provider: 'gemini-veo',
+    });
+    await videoDoc.save();
+    console.log('[Gemini-VEO] Video metadata saved to database');
 
     return res.json({
       success: true,
