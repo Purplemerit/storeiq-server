@@ -179,7 +179,16 @@ async function uploadImageBuffer(buffer, mimetype, userId, username, metadata = 
     if (mimetype && mimetype.split('/')[1]) {
       ext = mimetype.split('/')[1];
     }
-    const key = `images/${safeUsername}/image-${timestamp}-${random}.${ext}`;
+    
+    // Use custom filename if provided, otherwise use default pattern
+    let filename;
+    if (metadata.customFilename) {
+      filename = `${metadata.customFilename}-${timestamp}-${random.substring(0, 8)}`;
+    } else {
+      filename = `image-${timestamp}-${random}`;
+    }
+    
+    const key = `images/${safeUsername}/${filename}.${ext}`;
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,

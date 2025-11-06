@@ -8,8 +8,8 @@ if (!process.env.GEMINI_API_KEY) {
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
   vertexai: true,
-  project: process.env.GOOGLE_CLOUD_PROJECT,
-  location: process.env.GOOGLE_CLOUD_LOCATION,
+  project: process.env.GCP_PROJECT_ID,
+  location: process.env.GCP_LOCATION,
 });
 
 module.exports = ai;
