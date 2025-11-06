@@ -344,7 +344,7 @@ router.post('/s3-multipart/abort', authMiddleware, async (req, res) => {
 const User = require('../models/User');
 
 router.post('/video/crop', authMiddleware, async (req, res) => {
-  const { videoUrl, s3Key, start, end, aspectRatio } = req.body;
+  const { videoUrl, s3Key, start, end, aspectRatio, exportName } = req.body;
   // Extract userId from authenticated user
   const userId = req.user && req.user._id ? req.user._id.toString() : null;
   let username = req.user && req.user.username ? req.user.username : null;
@@ -377,7 +377,8 @@ router.post('/video/crop', authMiddleware, async (req, res) => {
       end,
       aspectRatio,
       userId,
-      username
+      username,
+      exportName
     });
     res.json({ jobId: job.jobId, status: job.status });
   } catch (err) {

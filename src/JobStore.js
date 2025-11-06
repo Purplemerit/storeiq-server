@@ -12,6 +12,7 @@ const JobSchema = new mongoose.Schema({
   aspectRatio: { type: String },
   userId: { type: String },
   username: { type: String },
+  exportName: { type: String },
   status: { type: String, default: 'pending' },
   error: { type: String, default: null },
   downloadUrl: { type: String, default: null },

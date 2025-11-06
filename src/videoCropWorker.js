@@ -158,7 +158,19 @@ async function processCropJob(job) {
       throw new Error('username is required for S3 upload and must be present in crop job');
     }
     const username = job.username.trim();
-    const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId, username, { edited: "true" });
+    
+    // Prepare metadata with custom filename if exportName is provided
+    const metadata = { edited: "true" };
+    if (job.exportName && typeof job.exportName === 'string' && job.exportName.trim().length > 0) {
+      // Sanitize the export name to make it safe for filenames
+      const sanitizedName = job.exportName.trim()
+        .replace(/[^a-zA-Z0-9-_\s]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .substring(0, 50); // Limit length
+      metadata.customFilename = sanitizedName;
+    }
+    
+    const { url, key } = await uploadVideoBuffer(buffer, 'video/mp4', job.userId, username, metadata);
     try {
       const updatedJob = await updateJob(String(job.jobId), { status: 'completed', downloadUrl: url, s3Key: key, error: null });
       if (!updatedJob) {
