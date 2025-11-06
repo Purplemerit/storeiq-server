@@ -64,20 +64,15 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 // Parse JSON bodies and cookies with increased size limit for image uploads
-// Skip body parsing for file upload routes - let multer handle them
+// Skip body parsing only for multipart/form-data routes - let multer handle them
 app.use((req, res, next) => {
-  // Skip body parsing for file upload endpoints
-  if (req.path === '/api/ai/edit-image') {
-    return next();
-  }
-
-  // Check content type as backup
+  // Check content type - skip body parsing only for multipart/form-data
   const contentType = req.headers['content-type'] || '';
   if (contentType.includes('multipart/form-data')) {
     return next();
   }
 
-  // Apply JSON and urlencoded parsers for other requests
+  // Apply JSON and urlencoded parsers for all other requests (including /api/ai/edit-image)
   express.json({ limit: '50mb' })(req, res, (err) => {
     if (err) return next(err);
     express.urlencoded({ limit: '50mb', extended: true })(req, res, next);

@@ -2,20 +2,20 @@ const express = require('express');
 const { generatePresignedUrl } = require('../s3Service');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const authMiddleware = require('./authMiddleware');
 const router = express.Router();
 
-// Middleware to require authentication (replace with your actual auth middleware)
-const requireAuth = (req, res, next) => {
-  // Example: req.user = { id, username } from your auth system
-  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-  next();
-};
-
 // POST /api/s3/generate-upload-url
-router.post('/generate-upload-url', requireAuth, async (req, res) => {
+router.post('/generate-upload-url', authMiddleware, async (req, res) => {
   try {
+    console.log('[s3] Generate upload URL request:', {
+      hasUser: !!req.user,
+      userId: req.user?.id || req.user?._id,
+      filename: req.body?.filename
+    });
+    
     const { filename, contentType } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.id || req.user._id;
     const username = req.user.username;
     if (!filename || !contentType) {
       return res.status(400).json({ error: 'filename and contentType are required' });
@@ -23,12 +23,13 @@ router.post('/generate-upload-url', requireAuth, async (req, res) => {
     const { url, key } = await generatePresignedUrl(filename, contentType, userId, username);
     res.json({ uploadUrl: url, key });
   } catch (err) {
+    console.error('[s3] Generate upload URL error:', err);
     res.status(500).json({ error: err.message || 'Failed to generate upload URL' });
   }
 });
 
 // GET /api/s3/generate-download-url?key=...
-router.get('/generate-download-url', requireAuth, async (req, res) => {
+router.get('/generate-download-url', authMiddleware, async (req, res) => {
   try {
     const { key } = req.query;
     if (!key) return res.status(400).json({ error: 'key is required' });

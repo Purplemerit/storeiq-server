@@ -38,21 +38,11 @@ router.post('/generate-video', handleGenerateVideo);
 router.post('/generate-image', authMiddleware, generateImage);
 
 // POST /api/ai/edit-image
-// Accepts multipart/form-data: image (required), prompt (required)
+// Accepts JSON: { prompt: string, imageS3Key: string }
+// No longer uses multer - image is uploaded to S3 first, then S3 key is provided
 router.post(
   '/edit-image',
   authMiddleware,
-  (req, res, next) => {
-    upload.fields([
-      { name: 'image', maxCount: 1 }
-    ])(req, res, (err) => {
-      if (err) {
-        console.error('[Multer] Upload error:', err);
-        return handleMulterError(err, req, res, next);
-      }
-      next();
-    });
-  },
   editImage
 );
 
