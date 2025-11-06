@@ -93,6 +93,8 @@ async function getUserVideos(req, res) {
           s3Key: v.key,
           title: meta && meta.title ? meta.title : v.title,
           description: meta && meta.description ? meta.description : '',
+          prompt: meta && meta.prompt ? meta.prompt : null, // Add prompt field
+          provider: meta && meta.provider ? meta.provider : null, // Add provider field
           url: signedUrl,
           createdAt: meta && meta.createdAt ? meta.createdAt : v.createdAt,
           thumbnail: v.thumbnail || null,
