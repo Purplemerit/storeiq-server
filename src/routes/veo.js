@@ -10,7 +10,8 @@ const {
   generateVideo, 
   getVideoOperationStatus,
   generateVideoAndWait,
-  downloadVideoFromGCS
+  downloadVideoFromGCS,
+  generateFilenameFromPrompt
 } = require('../geminiService');
 const { uploadVideoBuffer } = require('../s3Service');
 
@@ -22,12 +23,13 @@ const { uploadVideoBuffer } = require('../s3Service');
  *   resolution: '360p' | '720p' | '1080p',
  *   sampleCount: 1 | 2,
  *   generateAudio: boolean,
+ *   audioLanguage: string (e.g., 'English', 'Spanish', 'French', 'Hindi'),
  *   modelType: 'standard' | 'fast' | 'v2'
  * }
  */
 router.post('/generate', authMiddleware, async (req, res) => {
   try {
-    const { prompt, resolution, sampleCount, generateAudio, modelType } = req.body;
+    const { prompt, resolution, sampleCount, generateAudio, audioLanguage, modelType } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Missing or invalid prompt' });
@@ -37,6 +39,7 @@ router.post('/generate', authMiddleware, async (req, res) => {
       resolution: resolution || '720p',
       sampleCount: sampleCount || 1,
       generateAudio: generateAudio !== undefined ? generateAudio : true,
+      audioLanguage: audioLanguage || 'English',
       modelType: modelType || 'standard'
     };
 
@@ -106,6 +109,7 @@ router.get('/status/:operationName(*)', authMiddleware, async (req, res) => {
  *   resolution: '360p' | '720p' | '1080p',
  *   sampleCount: 1 | 2,
  *   generateAudio: boolean,
+ *   audioLanguage: string (e.g., 'English', 'Spanish', 'French', 'Hindi'),
  *   modelType: 'standard' | 'fast' | 'v2',
  *   uploadToS3: boolean (default: false)
  * }
@@ -116,7 +120,8 @@ router.post('/generate-and-wait', authMiddleware, async (req, res) => {
       prompt, 
       resolution, 
       sampleCount, 
-      generateAudio, 
+      generateAudio,
+      audioLanguage,
       modelType,
       uploadToS3,
       maxAttempts,
@@ -131,6 +136,7 @@ router.post('/generate-and-wait', authMiddleware, async (req, res) => {
       resolution: resolution || '720p',
       sampleCount: sampleCount || 1,
       generateAudio: generateAudio !== undefined ? generateAudio : true,
+      audioLanguage: audioLanguage || 'English',
       modelType: modelType || 'standard'
     };
 
@@ -161,14 +167,21 @@ router.post('/generate-and-wait', authMiddleware, async (req, res) => {
           const userId = req.user._id.toString();
           const username = req.user.username || userId;
           
+          // Generate meaningful filename from prompt
+          const customFilename = generateFilenameFromPrompt(prompt);
+          
           const videoBuffer = await downloadVideoFromGCS(video.url);
-          const s3Url = await uploadVideoBuffer(videoBuffer, userId, username, {
-            contentType: video.mimeType
-          });
+          const s3Result = await uploadVideoBuffer(
+            videoBuffer,
+            video.mimeType || 'video/mp4',
+            userId,
+            username,
+            { customFilename }
+          );
           
           processedVideos.push({
             ...video,
-            s3Url,
+            s3Url: s3Result.url,
             uploadedToS3: true
           });
         } catch (uploadErr) {
@@ -210,12 +223,13 @@ router.post('/generate-and-wait', authMiddleware, async (req, res) => {
  * POST /api/veo/download-and-upload
  * Download video from GCS and upload to S3
  * Body: {
- *   gcsUri: string
+ *   gcsUri: string,
+ *   prompt?: string (optional, for generating meaningful filename)
  * }
  */
 router.post('/download-and-upload', authMiddleware, async (req, res) => {
   try {
-    const { gcsUri } = req.body;
+    const { gcsUri, prompt } = req.body;
 
     if (!gcsUri || typeof gcsUri !== 'string') {
       return res.status(400).json({ error: 'Missing or invalid gcsUri' });
@@ -224,17 +238,24 @@ router.post('/download-and-upload', authMiddleware, async (req, res) => {
     const userId = req.user._id.toString();
     const username = req.user.username || userId;
 
+    // Generate meaningful filename from prompt if provided
+    const customFilename = prompt ? generateFilenameFromPrompt(prompt) : undefined;
+
     // Download from GCS
     const videoBuffer = await downloadVideoFromGCS(gcsUri);
 
     // Upload to S3
-    const s3Url = await uploadVideoBuffer(videoBuffer, userId, username, {
-      contentType: 'video/mp4'
-    });
+    const s3Result = await uploadVideoBuffer(
+      videoBuffer,
+      'video/mp4',
+      userId,
+      username,
+      { customFilename }
+    );
 
     res.status(200).json({
       success: true,
-      s3Url,
+      s3Url: s3Result.url,
       gcsUri
     });
 

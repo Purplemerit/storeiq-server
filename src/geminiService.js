@@ -109,12 +109,57 @@ async function generateScript(prompt) {
 }
 
 /**
+ * Generate a short, meaningful filename from a prompt
+ * @param {string} prompt - Video generation prompt
+ * @param {number} maxLength - Maximum filename length (default: 50)
+ * @returns {string} - Sanitized filename (without extension)
+ */
+function generateFilenameFromPrompt(prompt, maxLength = 50) {
+  if (!prompt || typeof prompt !== 'string') {
+    return 'ai-video';
+  }
+  
+  // Extract the core subject from the prompt
+  let filename = prompt.toLowerCase().trim();
+  
+  // Remove common meta-instructions and filler words (order matters!)
+  filename = filename.replace(/^(show|display)\s+me\s+/i, '');
+  filename = filename.replace(/^(create|make|generate|produce|show|display)\s+(a\s+)?(video\s+)?(about|of|showing|depicting|displaying)?\s*/i, '');
+  filename = filename.replace(/^(a|an|the)\s+/i, '');
+  
+  // Remove special characters and replace with hyphens
+  filename = filename
+    .replace(/[^\w\s-]/g, '')  // Remove special chars except word chars, spaces, and hyphens
+    .replace(/\s+/g, '-')       // Replace spaces with hyphens
+    .replace(/-+/g, '-')        // Replace multiple hyphens with single hyphen
+    .replace(/^-+|-+$/g, '');   // Remove leading/trailing hyphens
+  
+  // Truncate to max length
+  if (filename.length > maxLength) {
+    filename = filename.substring(0, maxLength);
+    // Cut at last hyphen to avoid partial words
+    const lastHyphen = filename.lastIndexOf('-');
+    if (lastHyphen > maxLength / 2) {
+      filename = filename.substring(0, lastHyphen);
+    }
+  }
+  
+  // Fallback if result is empty or too short
+  if (!filename || filename.length < 3) {
+    filename = 'ai-video';
+  }
+  
+  return filename;
+}
+
+/**
  * Improve prompt for better Veo results
  * Converts abstract/meta instructions into concrete visual descriptions
  * @param {string} prompt - Original prompt
+ * @param {string} language - Audio language (e.g., 'English', 'Spanish', 'French')
  * @returns {string} - Improved prompt
  */
-function improvePromptForVeo(prompt) {
+function improvePromptForVeo(prompt, language = 'English') {
   let improved = prompt;
   
   // Remove meta-instructions more carefully
@@ -160,6 +205,12 @@ function improvePromptForVeo(prompt) {
   const wordCount = improved.split(/\s+/).length;
   if (wordCount < 6) {
     improved += ', soft natural lighting';
+  }
+  
+  // Add language specification for audio narration
+  // This helps Veo generate audio in the correct language
+  if (language && language.toLowerCase() !== 'none') {
+    improved += `. Narration in ${language}`;
   }
   
   // Capitalize first letter
@@ -221,6 +272,36 @@ function sanitizePrompt(prompt) {
     text = text.substring(0, 500);
   }
   
+  // Check for Veo-3 content policy violations
+  // Veo-3 prohibits real people's names/likenesses to prevent deepfakes
+  const celebrityNames = [
+    /keanu\s+reeves/i,
+    /elon\s+musk/i,
+    /taylor\s+swift/i,
+    /tom\s+cruise/i,
+    /brad\s+pitt/i,
+    /angelina\s+jolie/i,
+    /will\s+smith/i,
+    /scarlett\s+johansson/i,
+    /robert\s+downey/i,
+    /jennifer\s+lawrence/i,
+    /chris\s+hemsworth/i,
+    /dwayne\s+johnson/i,
+    /the\s+rock/i,
+    // Add more as needed
+  ];
+  
+  for (const namePattern of celebrityNames) {
+    if (namePattern.test(text)) {
+      const match = text.match(namePattern);
+      throw new Error(
+        `Veo-3 Content Policy: Cannot use real people's names or likenesses (found: "${match[0]}"). ` +
+        `Instead, describe the character's appearance (e.g., "a man with dark hair wearing a black suit" instead of "Keanu Reeves"). ` +
+        `This policy prevents deepfakes and protects individuals' identities.`
+      );
+    }
+  }
+  
   // Check for abstract/problematic patterns
   const abstractPatterns = [
     /create a video about/i,
@@ -280,7 +361,8 @@ async function generateVideo(prompt, videoConfig = {}) {
     
     // Auto-improve prompt if requested
     if (videoConfig.autoImprovePrompt !== false) {  // Default is true
-      const improvedPrompt = improvePromptForVeo(sanitizedPrompt);
+      const language = videoConfig.audioLanguage || 'English';
+      const improvedPrompt = improvePromptForVeo(sanitizedPrompt, language);
       if (improvedPrompt !== sanitizedPrompt) {
         sanitizedPrompt = improvedPrompt;
       }
@@ -486,7 +568,17 @@ async function getVideoOperationStatus(operationName) {
         let errorMessage = operation.error.message || JSON.stringify(operation.error);
         let suggestion = '';
         
-        if (operation.error.code === 13) {
+        // Check for content policy violations
+        if (errorMessage.includes('usage guidelines') || 
+            errorMessage.includes('content policy') ||
+            errorMessage.includes('violate') ||
+            errorMessage.includes('29310472')) {
+          suggestion = 'Content Policy Violation: Your prompt likely contains prohibited content. ' +
+                      'Common issues: (1) Real people\'s names (use generic descriptions instead), ' +
+                      '(2) Violence, explicit content, or harmful stereotypes, ' +
+                      '(3) Copyrighted characters or brands. ' +
+                      'Try rephrasing with generic descriptions of appearance and actions.';
+        } else if (operation.error.code === 13) {
           suggestion = 'Internal error from Veo API. Possible causes: content policy violation, model availability, or GCS bucket permissions.';
         } else if (operation.error.code === 7) {
           suggestion = 'Permission denied. Ensure service account has roles/aiplatform.user and roles/storage.objectCreator.';
@@ -662,6 +754,7 @@ module.exports = {
   downloadVideoFromGCS,
   sanitizePrompt,
   improvePromptForVeo,
+  generateFilenameFromPrompt,
   checkGCSAccess,
   listModels 
 };

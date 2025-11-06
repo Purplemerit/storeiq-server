@@ -13,7 +13,7 @@ const { uploadVideoBuffer } = require("../s3Service.js");
  */
 router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
   try {
-    const { prompt, quality, voiceSpeed } = req.body;
+    const { prompt, quality, voiceSpeed, audioLanguage } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: "Prompt is required" });
@@ -37,12 +37,14 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
     console.log(`[Veo-3] Starting video generation for user ${username}`);
     console.log(`[Veo-3] Prompt: ${prompt.substring(0, 100)}...`);
     console.log(`[Veo-3] Resolution: ${resolution}`);
+    console.log(`[Veo-3] Audio Language: ${audioLanguage || 'English'}`);
 
     // Generate video and wait for completion
     const result = await generateVideoAndWait(prompt, {
       resolution: resolution,
       sampleCount: 1,
-      modelType: 'standard'
+      modelType: 'standard',
+      audioLanguage: audioLanguage || 'English'
       // Note: Removed generateAudio as it may cause internal errors in some regions
     }, {
       maxAttempts: 60,  // 5 minutes max

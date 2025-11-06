@@ -116,7 +116,7 @@ async function uploadVideoBase64(videoBase64, userId, username, metadata = {}) {
  * @param {string} mimetype
  * @param {string} userId
  * @param {string} username
- * @param {object} metadata
+ * @param {object} metadata - Optional metadata including customFilename
  */
 async function uploadVideoBuffer(buffer, mimetype, userId, username, metadata = {}) {
   if (!userId) {
@@ -133,7 +133,16 @@ async function uploadVideoBuffer(buffer, mimetype, userId, username, metadata = 
     if (mimetype && mimetype.split('/')[1]) {
       ext = mimetype.split('/')[1];
     }
-    const key = `videos/${safeUsername}/video-${timestamp}-${random}.${ext}`;
+    
+    // Use custom filename if provided, otherwise use default pattern
+    let filename;
+    if (metadata.customFilename) {
+      filename = `${metadata.customFilename}-${timestamp}-${random.substring(0, 8)}`;
+    } else {
+      filename = `video-${timestamp}-${random}`;
+    }
+    
+    const key = `videos/${safeUsername}/${filename}.${ext}`;
 
     const command = new PutObjectCommand({
       Bucket: AWS_BUCKET_NAME,
