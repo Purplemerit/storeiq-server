@@ -38,14 +38,13 @@ router.post('/generate-video', handleGenerateVideo);
 router.post('/generate-image', authMiddleware, generateImage);
 
 // POST /api/ai/edit-image
-// Accepts multipart/form-data: image (required), mask (optional), prompt (required)
+// Accepts multipart/form-data: image (required), prompt (required)
 router.post(
   '/edit-image',
   authMiddleware,
   (req, res, next) => {
     upload.fields([
-      { name: 'image', maxCount: 1 },
-      { name: 'mask', maxCount: 1 }
+      { name: 'image', maxCount: 1 }
     ])(req, res, (err) => {
       if (err) {
         console.error('[Multer] Upload error:', err);

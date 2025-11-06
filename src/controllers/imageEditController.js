@@ -19,7 +19,7 @@ const sharp = require('sharp');
 
 /**
  * POST /api/ai/edit-image
- * Accepts: image (required), mask (optional), prompt (required)
+ * Accepts: image (required), prompt (required)
  * Authenticated user context required (req.user)
  * Multer middleware must provide req.files and req.body
  *
@@ -32,11 +32,9 @@ async function editImage(req, res) {
     const prompt = req.body?.prompt;
     // Accept either direct upload (multer) or S3 key
     let imageBuffer, imageMimeType;
-    let maskBuffer = null, maskMimeType = null;
     let inputType = 'upload';
     // S3 key support
     const imageS3Key = req.body?.imageS3Key;
-    const maskS3Key = req.body?.maskS3Key;
     const s3Service = require('../s3Service');
 
     if (!user) {
@@ -59,14 +57,6 @@ async function editImage(req, res) {
       return res.status(400).json({ error: 'Image file or imageS3Key is required' });
     }
 
-    if (maskS3Key) {
-      maskBuffer = await s3Service.getFileBuffer(maskS3Key);
-      maskMimeType = maskS3Key.endsWith('.jpg') || maskS3Key.endsWith('.jpeg') ? 'image/jpeg' : maskS3Key.endsWith('.png') ? 'image/png' : 'image/*';
-    } else if (req.files?.mask?.[0]) {
-      maskBuffer = req.files.mask[0].buffer;
-      maskMimeType = req.files.mask[0].mimetype || 'image/png';
-    }
-
     // Call Gemini API with gemini-2.5-flash-image model
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) {
@@ -82,7 +72,6 @@ async function editImage(req, res) {
 
     console.log('Editing image with Gemini 2.5 Flash Image...');
 
-
     // Build the request with inline image data
     const parts = [
       {
@@ -95,16 +84,6 @@ async function editImage(req, res) {
         text: prompt
       }
     ];
-    // If mask is provided, include it as well
-    if (maskBuffer) {
-      const maskBase64 = maskBuffer.toString('base64');
-      parts.unshift({
-        inline_data: {
-          mime_type: maskMimeType,
-          data: maskBase64
-        }
-      });
-    }
 
     const requestBody = {
       contents: [
@@ -181,7 +160,7 @@ async function editImage(req, res) {
       fileName,
       createdAt: new Date().toISOString(),
       provider: 'gemini-2.5-flash-image',
-      editType: maskBuffer ? 'masked-editing' : 'image-editing',
+      editType: 'image-editing',
       inputType,
     });
   } catch (err) {
