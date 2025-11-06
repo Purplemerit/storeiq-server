@@ -189,8 +189,41 @@ router.get('/images', authMiddleware, async (req, res) => {
     if (!userId) {
       return res.status(401).json({ error: 'User authentication required' });
     }
+    
+    // Get images from S3
     const images = await listUserImagesFromS3(userId, username);
-    res.json(Array.isArray(images) ? images : []);
+    
+    // Get database records to merge prompt and other metadata
+    const dbRecords = await Video.find({ 
+      owner: userId,
+      s3Key: { $regex: /^images\// } // Only get image records
+    });
+    
+    // Create a map of s3Key to database record for quick lookup
+    const dbMap = {};
+    dbRecords.forEach(record => {
+      dbMap[record.s3Key] = record;
+    });
+    
+    // Merge S3 data with database data
+    const enrichedImages = images.map(img => {
+      const dbRecord = dbMap[img.key];
+      if (dbRecord) {
+        return {
+          ...img,
+          id: dbRecord._id.toString(),
+          s3Key: dbRecord.s3Key,
+          title: dbRecord.title || img.title,
+          description: dbRecord.description,
+          prompt: dbRecord.prompt, // Add prompt from database
+          provider: dbRecord.provider,
+          createdAt: dbRecord.createdAt || img.createdAt
+        };
+      }
+      return img;
+    });
+    
+    res.json(Array.isArray(enrichedImages) ? enrichedImages : []);
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to fetch images' });
   }

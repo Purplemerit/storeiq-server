@@ -22,39 +22,68 @@ const { GoogleAuth } = require('google-auth-library');
 
 /**
  * Helper function to generate meaningful filename from prompt
- * Similar to video generation
+ * Creates a short, readable title (max 3-4 words, 30 chars)
  */
 function generateMeaningfulFilename(prompt) {
   if (!prompt || typeof prompt !== 'string') return 'generated-image';
   
-  // Extract key words from prompt (first 5-6 words, max 50 chars)
+  // Extract key words from prompt (first 3-4 words only for shorter names)
   let cleaned = prompt
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '') // Remove special chars
     .trim()
     .split(/\s+/)
-    .slice(0, 6)
+    .slice(0, 4) // Only take first 4 words
     .join('-');
   
-  // Limit length
-  if (cleaned.length > 50) {
-    cleaned = cleaned.substring(0, 50);
+  // Limit length to 30 characters for shorter names
+  if (cleaned.length > 30) {
+    cleaned = cleaned.substring(0, 30);
   }
   
   return cleaned || 'generated-image';
 }
 
 /**
+ * Helper function to generate a short, user-friendly title
+ * Takes first 3-4 words from prompt, properly capitalized
+ */
+function generateShortTitle(prompt) {
+  if (!prompt || typeof prompt !== 'string') return 'Generated Image';
+  
+  // Extract first 3-4 meaningful words
+  const words = prompt
+    .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special chars
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4); // Only take first 4 words
+  
+  // Capitalize first letter of each word
+  const title = words
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+  
+  return title || 'Generated Image';
+}
+
+/**
  * POST /api/ai/generate-image
- * Body: { prompt: string }
+ * Body: { prompt: string, aspectRatio?: string }
  * Authenticated user context required (req.user)
  *
  * Generates an image using Google Imagen 4 via Vertex AI
  * Returns the image URL after uploading to S3
+ * 
+ * Supported aspect ratios:
+ * - "1:1" (1024x1024) - Square
+ * - "9:16" (768x1344) - Vertical/Portrait
+ * - "16:9" (1344x768) - Horizontal/Landscape
+ * - "4:3" (1152x896) - Standard
+ * - "3:4" (896x1152) - Portrait
  */
 async function generateImage(req, res) {
   try {
-    const { prompt } = req.body;
+    const { prompt, aspectRatio } = req.body;
     const user = req.user;
 
     if (!user) {
@@ -63,6 +92,12 @@ async function generateImage(req, res) {
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Prompt is required' });
     }
+
+    // Validate aspect ratio if provided
+    const validAspectRatios = ['1:1', '9:16', '16:9', '4:3', '3:4'];
+    const selectedAspectRatio = aspectRatio && validAspectRatios.includes(aspectRatio) 
+      ? aspectRatio 
+      : '1:1'; // Default to square
 
     // Get Google Cloud credentials
     const projectId = process.env.GCP_PROJECT_ID;
@@ -87,6 +122,7 @@ async function generateImage(req, res) {
     const vertexApiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${imagenModel}:predict`;
 
     console.log('Generating image with Imagen 4 Fast...');
+    console.log('Aspect ratio:', selectedAspectRatio);
     const vertexResponse = await axios.post(
       vertexApiUrl,
       {
@@ -96,7 +132,8 @@ async function generateImage(req, res) {
           }
         ],
         parameters: {
-          sampleCount: 1
+          sampleCount: 1,
+          aspectRatio: selectedAspectRatio
         }
       },
       {
@@ -126,8 +163,11 @@ async function generateImage(req, res) {
 
     const imageBuffer = Buffer.from(imageBase64, 'base64');
     
-    // Generate meaningful filename from prompt (similar to video generation)
+    // Generate meaningful filename from prompt (short version for file system)
     const meaningfulFilename = generateMeaningfulFilename(prompt);
+    
+    // Generate short, user-friendly title for display
+    const shortTitle = generateShortTitle(prompt);
     
     // Upload to S3 using existing service
     const userId = user.id || user._id;
@@ -154,7 +194,7 @@ async function generateImage(req, res) {
       videoRecord = new Video({
         s3Key: s3Result.key,
         owner: userId,
-        title: meaningfulFilename,
+        title: shortTitle, // Use short title instead of filename
         description: prompt,
         prompt: prompt,
         provider: 'vertex-ai-imagen-4',
@@ -177,7 +217,7 @@ async function generateImage(req, res) {
       s3Key: s3Result.key,
       prompt,
       userId,
-      title: meaningfulFilename,
+      title: shortTitle, // Return short title to frontend
       createdAt: new Date().toISOString(),
       provider: 'vertex-ai-imagen-4',
     });
