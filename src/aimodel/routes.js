@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const axios = require("axios");
-const { generateVideoAndWait, downloadVideoFromGCS } = require("../geminiService.js");
+const { generateVideoAndWait, downloadVideoFromGCS, generateFilenameFromPrompt } = require("../geminiService.js");
 const verifyJWT = require("../routes/authMiddleware.js");
 const { uploadVideoBuffer } = require("../s3Service.js");
 // const GeneratedVideo = require("../models/GeneratedVideo"); // if you have this model
@@ -68,6 +68,9 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
     let s3Url = null;
     let s3Key = null;
 
+    // Generate meaningful filename from prompt
+    const customFilename = generateFilenameFromPrompt(prompt);
+
     if (video.type === 'gcs') {
       // Download from GCS
       console.log('[Veo-3] Downloading video from Cloud Storage...');
@@ -76,14 +79,18 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
 
       // Upload to S3
       console.log('[Veo-3] Uploading to S3...');
-      const uploadResult = await uploadVideoBuffer(videoBuffer, userId, username, {
-        contentType: video.mimeType || 'video/mp4',
-        metadata: {
+      const uploadResult = await uploadVideoBuffer(
+        videoBuffer,
+        video.mimeType || 'video/mp4',
+        userId,
+        username,
+        {
+          customFilename,
           generated: 'veo-3',
           resolution: resolution,
           prompt: prompt.substring(0, 200)
         }
-      });
+      );
       
       s3Url = uploadResult.url || uploadResult;
       s3Key = uploadResult.key || uploadResult.s3Key;
@@ -94,13 +101,17 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
       console.log('[Veo-3] Processing base64 encoded video...');
       const videoBuffer = Buffer.from(video.videoData, 'base64');
       
-      const uploadResult = await uploadVideoBuffer(videoBuffer, userId, username, {
-        contentType: video.mimeType || 'video/mp4',
-        metadata: {
+      const uploadResult = await uploadVideoBuffer(
+        videoBuffer,
+        video.mimeType || 'video/mp4',
+        userId,
+        username,
+        {
+          customFilename,
           generated: 'veo-3',
           resolution: resolution
         }
-      });
+      );
       
       s3Url = uploadResult.url || uploadResult;
       s3Key = uploadResult.key || uploadResult.s3Key;
