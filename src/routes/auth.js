@@ -326,6 +326,56 @@ router.post("/disconnect-youtube", authMiddleware, async (req, res) => {
   }
 });
 
+// Avatar proxy endpoint to bypass CORS/ORB issues
+router.get("/avatar-proxy", async (req, res) => {
+  try {
+    const { url } = req.query;
+    
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: "URL parameter is required" });
+    }
+
+    // Validate that it's a valid image URL from trusted sources
+    const allowedDomains = [
+      'googleusercontent.com',
+      'githubusercontent.com',
+      'fbcdn.net',
+      'graph.facebook.com'
+    ];
+    
+    const isAllowed = allowedDomains.some(domain => url.includes(domain));
+    if (!isAllowed) {
+      return res.status(403).json({ error: "Domain not allowed" });
+    }
+
+    // Fetch the image using axios
+    const axios = require('axios');
+    const response = await axios.get(url, {
+      responseType: 'stream',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    // Get the content type
+    const contentType = response.headers['content-type'];
+    if (!contentType || !contentType.startsWith('image/')) {
+      return res.status(400).json({ error: "Invalid content type" });
+    }
+
+    // Set appropriate headers
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // Pipe the image to response
+    response.data.pipe(res);
+  } catch (err) {
+    console.error('[AVATAR PROXY ERROR]', err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.use("/instagram", facebookAuthRouter);
 
 module.exports = router;
