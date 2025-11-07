@@ -15,6 +15,8 @@ const express = require("express");
 const router = express.Router();
 const { GoogleAuth } = require('google-auth-library');
 const axios = require('axios');
+const ttsQueueService = require('../services/ttsQueueService');
+const crypto = require('crypto');
 require("dotenv").config();
 
 // Default voice configuration - Neural2 voices for high quality
@@ -47,102 +49,167 @@ router.post("/tts", async (req, res) => {
       return res.status(400).json({ error: "Text is required" });
     }
 
-    // Get Google Cloud credentials
-    const projectId = process.env.GCP_PROJECT_ID;
-    if (!projectId) {
-      return res.status(500).json({ error: 'Google Cloud project not configured' });
-    }
-
-    // Initialize Google Auth
-    const auth = new GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/cloud-platform']
-    });
-    const client = await auth.getClient();
-    const accessToken = await client.getAccessToken();
-
-    if (!accessToken.token) {
-      return res.status(500).json({ error: 'Failed to get access token' });
-    }
-
-    // Find the selected voice configuration
-    const selectedVoice = AVAILABLE_VOICES.find(v => v.voice_id === voiceId);
-    const voiceConfig = selectedVoice ? {
-      languageCode: selectedVoice.languageCode,
-      name: selectedVoice.voice_id,
-      ssmlGender: selectedVoice.ssmlGender
-    } : DEFAULT_VOICE_CONFIG;
-
-    // Google Cloud Text-to-Speech API endpoint
-    const ttsApiUrl = `https://texttospeech.googleapis.com/v1/text:synthesize`;
-
-    console.log('Generating speech with Google Cloud TTS...');
-    console.log('Voice:', voiceConfig.name);
-
-    // Make request to Google Cloud TTS
-    const response = await axios.post(
-      ttsApiUrl,
-      {
-        input: { text },
-        voice: voiceConfig,
-        audioConfig: {
-          audioEncoding: "MP3",
-          speakingRate: 1.0,
-          pitch: 0.0,
-          volumeGainDb: 0.0,
-          effectsProfileId: ["headphone-class-device"], // Optimized for headphones
-        }
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken.token}`,
-          'Content-Type': 'application/json'
-        }
+    // Wrap the actual TTS generation in a processor function
+    const ttsProcessor = async () => {
+      // Get Google Cloud credentials
+      const projectId = process.env.GCP_PROJECT_ID;
+      if (!projectId) {
+        throw new Error('Google Cloud project not configured');
       }
-    );
 
-    console.log('TTS response received');
+      // Initialize Google Auth
+      const auth = new GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/cloud-platform']
+      });
+      const client = await auth.getClient();
+      const accessToken = await client.getAccessToken();
 
-    // Extract audio content (base64 encoded)
-    const audioContent = response.data.audioContent;
-    if (!audioContent) {
-      console.error('No audioContent in response');
-      return res.status(502).json({ error: 'TTS failed - no audio data returned' });
-    }
+      if (!accessToken.token) {
+        throw new Error('Failed to get access token');
+      }
 
-    // Convert base64 to buffer and send as audio
-    const audioBuffer = Buffer.from(audioContent, 'base64');
-    
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Content-Length", audioBuffer.length);
-    res.send(audioBuffer);
+      // Find the selected voice configuration
+      const selectedVoice = AVAILABLE_VOICES.find(v => v.voice_id === voiceId);
+      const voiceConfig = selectedVoice ? {
+        languageCode: selectedVoice.languageCode,
+        name: selectedVoice.voice_id,
+        ssmlGender: selectedVoice.ssmlGender
+      } : DEFAULT_VOICE_CONFIG;
 
+      // Google Cloud Text-to-Speech API endpoint
+      const ttsApiUrl = `https://texttospeech.googleapis.com/v1/text:synthesize`;
+
+      console.log('Generating speech with Google Cloud TTS...');
+      console.log('Voice:', voiceConfig.name);
+
+      // Make request to Google Cloud TTS
+      const response = await axios.post(
+        ttsApiUrl,
+        {
+          input: { text },
+          voice: voiceConfig,
+          audioConfig: {
+            audioEncoding: "MP3",
+            speakingRate: 1.0,
+            pitch: 0.0,
+            volumeGainDb: 0.0,
+            effectsProfileId: ["headphone-class-device"], // Optimized for headphones
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken.token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('TTS response received');
+
+      // Extract audio content (base64 encoded)
+      const audioContent = response.data.audioContent;
+      if (!audioContent) {
+        throw new Error('TTS failed - no audio data returned');
+      }
+
+      // Convert base64 to buffer
+      const audioBuffer = Buffer.from(audioContent, 'base64');
+      
+      return { audioBuffer };
+    };
+
+    // Add job to queue
+    const jobId = ttsQueueService.addJob(ttsProcessor, {
+      textLength: text.length,
+      voiceId,
+      userId: req.user?.id || 'anonymous',
+      createdAt: new Date().toISOString(),
+    });
+
+    const status = ttsQueueService.getJobStatus(jobId);
+
+    // Return 202 with job ID
+    res.status(202).json({
+      jobId,
+      status: 'queued',
+      position: status.position,
+      queueLength: status.queueLength,
+      estimatedWaitTime: status.estimatedWaitTime,
+      message: 'TTS generation job queued',
+    });
   } catch (error) {
     console.error("TTS Error:", error?.response?.data || error.message);
-
-    // Provide more detailed error messages
-    if (error.response?.status === 400) {
-      return res.status(400).json({
-        error: 'Invalid request to Google Cloud TTS',
-        details: error.response?.data?.error?.message || 'Bad request'
-      });
-    }
-    if (error.response?.status === 403) {
-      return res.status(403).json({
-        error: 'Google Cloud TTS access denied',
-        details: 'Check service account permissions and API enablement'
-      });
-    }
-    if (error.response?.status === 429) {
-      return res.status(429).json({
-        error: 'Rate limit exceeded',
-        details: 'Too many requests to Google Cloud TTS. Please try again later.'
-      });
-    }
-
     res.status(500).json({ 
       error: "TTS failed", 
       details: error.message || error 
     });
+  }
+});
+
+// GET /video-tts/tts-status/:jobId
+router.get("/tts-status/:jobId", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const status = ttsQueueService.getJobStatus(jobId);
+
+    if (status.status === 'not_found') {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    if (status.status === 'completed') {
+      // Return audio buffer as response
+      const audioBuffer = status.result?.audioBuffer;
+      if (!audioBuffer) {
+        return res.status(500).json({ error: 'Audio data not available' });
+      }
+
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Content-Length", audioBuffer.length);
+      return res.send(audioBuffer);
+    }
+
+    if (status.status === 'failed') {
+      return res.status(200).json({
+        status: 'failed',
+        error: status.error,
+      });
+    }
+
+    // queued or processing
+    res.status(200).json({
+      status: status.status,
+      position: status.position,
+      queueLength: status.queueLength,
+      estimatedWaitTime: status.estimatedWaitTime,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// GET /video-tts/tts-queue-stats
+router.get("/tts-queue-stats", async (req, res) => {
+  try {
+    const stats = ttsQueueService.getStats();
+    res.status(200).json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// DELETE /video-tts/tts-job/:jobId
+router.delete("/tts-job/:jobId", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const success = ttsQueueService.cancelJob(jobId);
+
+    if (!success) {
+      return res.status(400).json({ error: 'Cannot cancel job (not found or already processing)' });
+    }
+
+    res.status(200).json({ message: 'Job cancelled successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 

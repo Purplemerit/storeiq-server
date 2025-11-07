@@ -1,6 +1,12 @@
 const express = require('express');
 const multer = require('multer');
-const { handleGenerateScript, handleGenerateVideo } = require('../controllers/aiController');
+const { 
+  handleGenerateScript, 
+  handleGenerateVideo, 
+  getScriptGenerationStatus, 
+  getScriptGenerationQueueStats, 
+  cancelScriptGenerationJob 
+} = require('../controllers/aiController');
 const { 
   generateImage, 
   getImageJobStatus, 
@@ -43,6 +49,9 @@ const handleMulterError = (err, req, res, next) => {
 };
 
 router.post('/generate-script', handleGenerateScript);
+router.get('/script-generation-status/:jobId', getScriptGenerationStatus);
+router.get('/script-generation-queue-stats', getScriptGenerationQueueStats);
+router.delete('/script-generation-job/:jobId', cancelScriptGenerationJob);
 router.post('/generate-video', handleGenerateVideo);
 
 // Image generation with queue

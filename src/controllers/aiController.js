@@ -1,6 +1,8 @@
 // AI Controllers for script and video generation
 const { generateScript, generateVideo } = require('../geminiService');
 const { uploadVideoBase64 } = require('../s3Service');
+const scriptQueueService = require('../services/scriptQueueService');
+const crypto = require('crypto');
 
 // POST /api/generate-script
 async function handleGenerateScript(req, res) {
@@ -9,8 +11,31 @@ async function handleGenerateScript(req, res) {
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Missing or invalid prompt' });
     }
-    const script = await generateScript(prompt);
-    res.status(200).json({ script });
+
+    // Wrap the actual script generation in a processor function
+    const scriptProcessor = async () => {
+      const script = await generateScript(prompt);
+      return { script };
+    };
+
+    // Add job to queue
+    const jobId = scriptQueueService.addJob(scriptProcessor, {
+      prompt: prompt.substring(0, 100),
+      userId: req.user?.id || 'anonymous',
+      createdAt: new Date().toISOString(),
+    });
+
+    const status = scriptQueueService.getJobStatus(jobId);
+
+    // Return 202 with job ID
+    res.status(202).json({
+      jobId,
+      status: 'queued',
+      position: status.position,
+      queueLength: status.queueLength,
+      estimatedWaitTime: status.estimatedWaitTime,
+      message: 'Script generation job queued',
+    });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
@@ -112,8 +137,73 @@ async function getUserVideos(req, res) {
   }
 }
 
+// GET /api/script-generation-status/:jobId
+async function getScriptGenerationStatus(req, res) {
+  try {
+    const { jobId } = req.params;
+    const status = scriptQueueService.getJobStatus(jobId);
+
+    if (status.status === 'not_found') {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    if (status.status === 'completed') {
+      return res.status(200).json({
+        status: 'completed',
+        script: status.result?.script,
+      });
+    }
+
+    if (status.status === 'failed') {
+      return res.status(200).json({
+        status: 'failed',
+        error: status.error,
+      });
+    }
+
+    // queued or processing
+    res.status(200).json({
+      status: status.status,
+      position: status.position,
+      queueLength: status.queueLength,
+      estimatedWaitTime: status.estimatedWaitTime,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+}
+
+// GET /api/script-generation-queue-stats
+async function getScriptGenerationQueueStats(req, res) {
+  try {
+    const stats = scriptQueueService.getStats();
+    res.status(200).json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+}
+
+// DELETE /api/script-generation-job/:jobId
+async function cancelScriptGenerationJob(req, res) {
+  try {
+    const { jobId } = req.params;
+    const success = scriptQueueService.cancelJob(jobId);
+
+    if (!success) {
+      return res.status(400).json({ error: 'Cannot cancel job (not found or already processing)' });
+    }
+
+    res.status(200).json({ message: 'Job cancelled successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+}
+
 module.exports = {
   handleGenerateScript,
   handleGenerateVideo,
   getUserVideos,
+  getScriptGenerationStatus,
+  getScriptGenerationQueueStats,
+  cancelScriptGenerationJob,
 };
