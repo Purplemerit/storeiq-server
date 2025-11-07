@@ -21,16 +21,24 @@ passport.use(
 
           if (user) {
             user.facebookId = profile.id;
-            user.avatar = user.avatar || profile.photos?.[0]?.value;
+            // Always update avatar from Facebook if available
+            if (profile.photos && profile.photos[0] && profile.photos[0].value) {
+              user.avatar = profile.photos[0].value;
+            }
             await user.save();
           } else {
             user = new User({
               facebookId: profile.id,
               email,
               username: profile.displayName,
-              avatar: profile.photos?.[0]?.value,
+              avatar: profile.photos && profile.photos[0] ? profile.photos[0].value : undefined,
             });
             await user.save();
+          }
+        } else {
+          // User already exists with facebookId - update avatar if available
+          if (profile.photos && profile.photos[0] && profile.photos[0].value) {
+            user.avatar = profile.photos[0].value;
           }
         }
 

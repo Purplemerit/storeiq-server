@@ -25,7 +25,10 @@ passport.use(
           if (user) {
             // Link GitHub account
             user.githubId = profile.id;
-            user.avatar = user.avatar || profile.photos?.[0]?.value;
+            // Always update avatar from GitHub if available
+            if (profile.photos && profile.photos[0] && profile.photos[0].value) {
+              user.avatar = profile.photos[0].value;
+            }
             await user.save();
           } else {
             // 3. Register new user
@@ -33,10 +36,16 @@ passport.use(
               githubId: profile.id,
               username: profile.username,
               email: email || null,
-              avatar: profile.photos?.[0]?.value,
+              avatar: profile.photos && profile.photos[0] ? profile.photos[0].value : undefined,
             });
             await user.save();
           }
+        } else {
+          // User already exists with githubId - update avatar if available
+          if (profile.photos && profile.photos[0] && profile.photos[0].value) {
+            user.avatar = profile.photos[0].value;
+          }
+          await user.save();
         }
 
         return done(null, user);

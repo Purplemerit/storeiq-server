@@ -65,7 +65,7 @@ router.post("/register", async (req, res) => {
     res.cookie("token", token, cookieOptions);
     res.status(201).json({
       token,
-      user: { id: user._id, email: user.email, username: user.username },
+      user: { id: user._id, email: user.email, username: user.username, avatar: user.avatar },
     });
   } catch (err) {
     console.error("[REGISTER ERROR]", err);
@@ -112,7 +112,7 @@ router.post("/login", async (req, res) => {
     res.cookie("token", token, cookieOptions);
     res.json({
       token,
-      user: { id: user._id, email: user.email, username: user.username },
+      user: { id: user._id, email: user.email, username: user.username, avatar: user.avatar },
     });
   } catch (err) {
     console.error("[LOGIN ERROR]", err);
@@ -123,7 +123,7 @@ router.post("/login", async (req, res) => {
 // Protected route
 router.get("/me", authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("id _id email username timezone");
+    const user = await User.findById(req.user._id).select("id _id email username timezone avatar");
     if (!user) return res.status(404).json({ error: "User not found" });
     // Only expose safe fields
     const safeUser = {
@@ -131,6 +131,7 @@ router.get("/me", authMiddleware, async (req, res) => {
       email: user.email,
       username: user.username,
       timezone: user.timezone,
+      avatar: user.avatar,
     };
     res.json({ user: safeUser });
   } catch (err) {
