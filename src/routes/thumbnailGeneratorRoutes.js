@@ -123,16 +123,41 @@ router.post("/generate-thumbnail", authenticateToken, upload.single("file"), asy
           thumbnailDesigns.map(async (design, index) => {
             try {
               // Resize to YouTube thumbnail size (1280x720)
-              const resizedImage = await sharp(imageBuffer)
+              let processedImage = await sharp(imageBuffer)
                 .resize(1280, 720, {
                   fit: "cover",
                   position: "center",
                 })
                 .toBuffer();
 
-              // For now, return base64 of resized image
-              // In production, you'd add text overlays using sharp composite
-              const thumbnailBase64 = resizedImage.toString("base64");
+              // Add text overlays if textElements exist
+              if (design.textElements && design.textElements.length > 0) {
+                const composites = [];
+
+                for (const textElement of design.textElements) {
+                  // Create SVG text overlay
+                  const svgText = createTextOverlaySVG(
+                    textElement.text,
+                    textElement.position,
+                    textElement.size,
+                    textElement.color
+                  );
+
+                  composites.push({
+                    input: Buffer.from(svgText),
+                    gravity: getGravityFromPosition(textElement.position),
+                  });
+                }
+
+                // Composite all text elements onto the image
+                if (composites.length > 0) {
+                  processedImage = await sharp(processedImage)
+                    .composite(composites)
+                    .toBuffer();
+                }
+              }
+
+              const thumbnailBase64 = processedImage.toString("base64");
 
               return {
                 id: index + 1,
@@ -407,6 +432,80 @@ async function extractVideoFrame(videoBuffer) {
       })
       .run();
   });
+}
+
+/**
+ * Create SVG text overlay for thumbnail
+ */
+function createTextOverlaySVG(text, position, size, color) {
+  // Determine font size based on size parameter
+  let fontSize = 80;
+  if (size === "small") fontSize = 50;
+  else if (size === "medium") fontSize = 70;
+  else if (size === "large") fontSize = 90;
+  else if (size === "xlarge") fontSize = 110;
+
+  // Determine Y position based on position parameter
+  let y = 360; // center
+  if (position === "top") y = 100;
+  else if (position === "bottom") y = 620;
+
+  // Add stroke for better readability
+  const strokeWidth = 4;
+  const strokeColor = color === "#FFFFFF" ? "#000000" : "#FFFFFF";
+
+  // Create SVG with text
+  const svg = `
+    <svg width="1280" height="720">
+      <style>
+        .text { 
+          font-family: 'Arial Black', Arial, sans-serif; 
+          font-weight: 900;
+          font-size: ${fontSize}px;
+          fill: ${color};
+          stroke: ${strokeColor};
+          stroke-width: ${strokeWidth}px;
+          paint-order: stroke fill;
+          text-anchor: middle;
+          dominant-baseline: middle;
+        }
+      </style>
+      <text x="640" y="${y}" class="text">${escapeXml(text)}</text>
+    </svg>
+  `.trim();
+
+  return svg;
+}
+
+/**
+ * Get Sharp gravity from position string
+ */
+function getGravityFromPosition(position) {
+  switch (position?.toLowerCase()) {
+    case "top":
+      return "north";
+    case "bottom":
+      return "south";
+    case "left":
+      return "west";
+    case "right":
+      return "east";
+    case "center":
+    default:
+      return "center";
+  }
+}
+
+/**
+ * Escape XML special characters
+ */
+function escapeXml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 module.exports = router;
