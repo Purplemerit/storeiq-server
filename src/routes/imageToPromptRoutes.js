@@ -16,6 +16,7 @@ router.post("/image-to-prompt", authenticateToken, async (req, res) => {
       imageS3Key,
       imageUrl,
       promptStyle = "detailed",
+      modelName = "gemini-2.5-flash", // Default to latest model
       includeColors = true,
       includeMood = true,
       includeComposition = true,
@@ -27,6 +28,14 @@ router.post("/image-to-prompt", authenticateToken, async (req, res) => {
     if (!imageS3Key && !imageUrl) {
       return res.status(400).json({
         error: "Either imageS3Key or imageUrl is required",
+      });
+    }
+
+    // Validate model name
+    const allowedModels = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+    if (!allowedModels.includes(modelName)) {
+      return res.status(400).json({
+        error: `Invalid model name. Allowed models: ${allowedModels.join(", ")}`,
       });
     }
 
@@ -75,8 +84,10 @@ router.post("/image-to-prompt", authenticateToken, async (req, res) => {
         );
 
         // Get Gemini model with vision
-        // Note: Gemini 2.5 Flash supports multimodal (text + images)
-        const model = getGeminiModel("models/gemini-2.0-flash-exp");
+        // Use the model selected by the user (default: gemini-2.5-flash)
+        // No "models/" prefix needed for @google/generative-ai package
+        console.log(`[ImageToPrompt] Using model: ${modelName}`);
+        const model = getGeminiModel(modelName);
 
         // Generate prompt using Gemini Vision
         console.log(`[ImageToPrompt] Analyzing image with Gemini Vision...`);

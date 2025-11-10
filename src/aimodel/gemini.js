@@ -10,10 +10,10 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
  * Get a Gemini model instance
- * @param {string} modelName - The model name with "models/" prefix (e.g., "models/gemini-2.0-flash-exp", "models/gemini-1.5-pro")
+ * @param {string} modelName - The model name WITHOUT "models/" prefix (e.g., "gemini-2.5-flash", "gemini-2.0-flash")
  * @returns {Object} - Gemini model instance
  */
-function getGeminiModel(modelName = "models/gemini-2.0-flash-exp") {
+function getGeminiModel(modelName = "gemini-2.5-flash") {
   return genAI.getGenerativeModel({ model: modelName });
 }
 
