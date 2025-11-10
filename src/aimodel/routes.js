@@ -15,7 +15,7 @@ const crypto = require("crypto");
  */
 router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
   try {
-    const { prompt, quality, aspectRatio, durationSeconds, enhancePrompt } = req.body;
+    const { prompt, quality, aspectRatio, durationSeconds, modelType, enhancePrompt } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: "Prompt is required" });
@@ -40,6 +40,9 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
     // Validate and set duration (default 8)
     const validDuration = [4, 6, 8].includes(durationSeconds) ? durationSeconds : 8;
     
+    // Validate model type (default standard)
+    const validModelType = ['standard', 'fast'].includes(modelType) ? modelType : 'standard';
+    
     // Validate enhance prompt (default true)
     const shouldEnhancePrompt = typeof enhancePrompt === 'boolean' ? enhancePrompt : true;
 
@@ -47,15 +50,15 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
     console.log(`[Veo-3] Job ID: ${jobId}`);
     console.log(`[Veo-3] Prompt: ${prompt.substring(0, 100)}...`);
     console.log(`[Veo-3] Resolution: ${resolution}, Aspect Ratio: ${validAspectRatio}, Duration: ${validDuration}s`);
-    console.log(`[Veo-3] Enhance Prompt: ${shouldEnhancePrompt}`);
+    console.log(`[Veo-3] Model: ${validModelType}, Enhance Prompt: ${shouldEnhancePrompt}`);
 
     // Define the video generation processor
     const videoProcessor = async (jobData) => {
-      const { prompt, resolution, aspectRatio, durationSeconds, enhancePrompt, userId, username } = jobData;
+      const { prompt, resolution, aspectRatio, durationSeconds, modelType, enhancePrompt, userId, username } = jobData;
 
       console.log(`[Veo-3] Starting video generation for job ${jobId}`);
       console.log(`[Veo-3] Resolution: ${resolution}, Aspect Ratio: ${aspectRatio}, Duration: ${durationSeconds}s`);
-      console.log(`[Veo-3] Enhance Prompt: ${enhancePrompt}`);
+      console.log(`[Veo-3] Model: ${modelType}, Enhance Prompt: ${enhancePrompt}`);
 
       // Generate video and wait for completion
       const result = await generateVideoAndWait(prompt, {
@@ -64,7 +67,7 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
         durationSeconds: durationSeconds,
         enhancePrompt: enhancePrompt,
         sampleCount: 1,
-        modelType: 'standard'
+        modelType: modelType
       }, {
         maxAttempts: 60,
         pollInterval: 5000
@@ -140,11 +143,17 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
       await videoDoc.save();
       console.log('[Veo-3] Video metadata saved to database');
 
+      // Extract token usage if available
+      const tokenUsage = result.operation?.metadata?.inputTokenCount || 
+                        result.operation?.response?.inputTokenCount ||
+                        null;
+
       return {
         s3Url,
         s3Key,
         resolution,
-        duration: 5,
+        duration: durationSeconds || 5,
+        tokenUsage: tokenUsage,
         operationName: result.operationName
       };
     };
@@ -157,8 +166,10 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
       resolution,
       aspectRatio: validAspectRatio,
       durationSeconds: validDuration,
-      enhancePrompt: shouldEnhancePrompt
-    }, videoProcessor);
+      modelType: validModelType,
+      enhancePrompt: shouldEnhancePrompt,
+      processor: videoProcessor
+    });
 
     console.log(`[Veo-3] Job ${jobId} added to queue at position ${queueResult.position}`);
 
@@ -216,6 +227,7 @@ router.get("/gemini-veo3/job-status/:jobId", verifyJWT, async (req, res) => {
         s3Key: status.result.s3Key,
         resolution: status.result.resolution,
         duration: status.result.duration,
+        tokenUsage: status.result.tokenUsage,
         completedAt: status.completedAt,
         processingTime: status.processingTime,
         message: 'Video generated successfully!'
