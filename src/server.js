@@ -11,6 +11,7 @@ const videoTTSRoutes = require("../src/ai-tools/text-audio");
 const videoMountingRoutes = require("../src/ai-tools/videoMounting");
 const uploadAudioRoutes = require("./ai-tools/uploadAudio");
 const instagramRoutes = require("../src/instagramconnect/instagram");
+const imageToPromptRoutes = require("./routes/imageToPromptRoutes");  // Image to Prompt routes
 
 
 const geminiRoutes = require("../src/aimodel/routes");
@@ -94,6 +95,7 @@ app.use(passport.initialize()); // no sessions
 
 // Mount routes
 app.use("/api/ai", aiRoutes);
+app.use("/api/ai", imageToPromptRoutes);  // Image to Prompt API
 app.use("/api/veo", veoRoutes);  // Veo-3 video generation API
 app.use("/api", routes);
 app.use("/auth", googleRoutes);
