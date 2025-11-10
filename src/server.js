@@ -13,6 +13,7 @@ const uploadAudioRoutes = require("./ai-tools/uploadAudio");
 const instagramRoutes = require("../src/instagramconnect/instagram");
 const imageToPromptRoutes = require("./routes/imageToPromptRoutes");  // Image to Prompt routes
 const memeGeneratorRoutes = require("./routes/memeGeneratorRoutes");  // Meme Generator routes
+const thumbnailGeneratorRoutes = require("./routes/thumbnailGeneratorRoutes");  // Thumbnail Generator routes
 
 
 const geminiRoutes = require("../src/aimodel/routes");
@@ -98,6 +99,7 @@ app.use(passport.initialize()); // no sessions
 app.use("/api/ai", aiRoutes);
 app.use("/api/ai", imageToPromptRoutes);  // Image to Prompt API
 app.use("/api/ai", memeGeneratorRoutes);  // Meme Generator API
+app.use("/api/ai", thumbnailGeneratorRoutes);  // Thumbnail Generator API
 app.use("/api/veo", veoRoutes);  // Veo-3 video generation API
 app.use("/api", routes);
 app.use("/auth", googleRoutes);
