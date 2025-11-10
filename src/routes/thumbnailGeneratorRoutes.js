@@ -2,40 +2,49 @@ const express = require("express");
 const router = express.Router();
 const authenticateToken = require("./authMiddleware");
 const { getGeminiModel } = require("../aimodel/gemini");
-const { getFileBuffer } = require("../s3Service");
-const axios = require("axios");
 const thumbnailGeneratorQueueService = require("../services/thumbnailGeneratorQueueService");
 const sharp = require("sharp");
 const ffmpeg = require("fluent-ffmpeg");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const multer = require("multer");
+
+// Configure multer for in-memory file storage (no disk/S3 upload)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+});
 
 /**
  * POST /api/ai/generate-thumbnail
  * Generate YouTube-optimized thumbnails from video/image using Gemini Vision
  */
-router.post("/generate-thumbnail", authenticateToken, async (req, res) => {
+router.post("/generate-thumbnail", authenticateToken, upload.single("file"), async (req, res) => {
   try {
     const {
-      imageS3Key,
-      imageUrl,
-      videoS3Key,
-      videoUrl,
       thumbnailStyle = "engaging", // engaging, bold, minimal, dramatic, playful
       textOverlay = "",
-      includeEmoji = false,
+      includeEmoji = "false",
       colorScheme = "vibrant", // vibrant, dark, bright, pastel
-      thumbnailCount = 3,
+      thumbnailCount = "3",
       modelName = "gemini-2.5-flash",
+      mediaType = "image",
     } = req.body;
 
     const userId = req.user?.id || req.user?.email || "anonymous";
+    const uploadedFile = req.file; // File from FormData
+
+    // Convert string values to proper types
+    const includeEmojiBoolean = includeEmoji === "true" || includeEmoji === true;
+    const thumbnailCountNumber = parseInt(thumbnailCount, 10);
 
     // Validate input
-    if (!imageS3Key && !imageUrl && !videoS3Key && !videoUrl) {
+    if (!uploadedFile) {
       return res.status(400).json({
-        error: "Either imageS3Key, imageUrl, videoS3Key, or videoUrl is required",
+        error: "File upload is required",
       });
     }
 
@@ -48,7 +57,7 @@ router.post("/generate-thumbnail", authenticateToken, async (req, res) => {
     }
 
     // Validate thumbnail count
-    if (thumbnailCount < 1 || thumbnailCount > 5) {
+    if (thumbnailCountNumber < 1 || thumbnailCountNumber > 5) {
       return res.status(400).json({
         error: "thumbnailCount must be between 1 and 5",
       });
@@ -59,40 +68,20 @@ router.post("/generate-thumbnail", authenticateToken, async (req, res) => {
       try {
         console.log(`[ThumbnailGenerator] Starting processing...`);
 
-        // Get image/video data
+        // Get image/video data from uploaded file
         let imageBuffer;
         let mimeType = "image/jpeg";
-        let isVideo = false;
 
-        if (imageS3Key) {
-          // Download from S3
-          console.log(`[ThumbnailGenerator] Downloading image from S3: ${imageS3Key}`);
-          imageBuffer = await getFileBuffer(imageS3Key);
-          mimeType = imageS3Key.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
-        } else if (imageUrl) {
-          // Download from URL
-          console.log(`[ThumbnailGenerator] Downloading image from URL: ${imageUrl}`);
-          const response = await axios.get(imageUrl, {
-            responseType: "arraybuffer",
-          });
-          imageBuffer = Buffer.from(response.data);
-          mimeType = response.headers["content-type"] || "image/jpeg";
-        } else if (videoS3Key) {
+        console.log(`[ThumbnailGenerator] Processing uploaded file: ${uploadedFile.originalname}`);
+        
+        if (mediaType === "video" || uploadedFile.mimetype.startsWith("video/")) {
           // For video, extract a frame using ffmpeg
-          console.log(`[ThumbnailGenerator] Processing video from S3: ${videoS3Key}`);
-          isVideo = true;
-          const videoBuffer = await getFileBuffer(videoS3Key);
-          imageBuffer = await extractVideoFrame(videoBuffer);
+          imageBuffer = await extractVideoFrame(uploadedFile.buffer);
           mimeType = "image/jpeg";
-        } else if (videoUrl) {
-          console.log(`[ThumbnailGenerator] Processing video from URL: ${videoUrl}`);
-          isVideo = true;
-          const response = await axios.get(videoUrl, {
-            responseType: "arraybuffer",
-          });
-          const videoBuffer = Buffer.from(response.data);
-          imageBuffer = await extractVideoFrame(videoBuffer);
-          mimeType = "image/jpeg";
+        } else {
+          // For image, use directly
+          imageBuffer = uploadedFile.buffer;
+          mimeType = uploadedFile.mimetype;
         }
 
         // Convert buffer to base64
@@ -102,9 +91,9 @@ router.post("/generate-thumbnail", authenticateToken, async (req, res) => {
         let systemPrompt = buildThumbnailPrompt(
           thumbnailStyle,
           textOverlay,
-          includeEmoji,
+          includeEmojiBoolean,
           colorScheme,
-          thumbnailCount
+          thumbnailCountNumber
         );
 
         // Get Gemini model with vision
@@ -183,15 +172,14 @@ router.post("/generate-thumbnail", authenticateToken, async (req, res) => {
     // Add job to queue with metadata
     const jobId = thumbnailGeneratorQueueService.addJob(processor, {
       userId,
-      imageS3Key,
-      imageUrl,
-      videoS3Key,
-      videoUrl,
+      fileName: uploadedFile.originalname,
+      fileSize: uploadedFile.size,
+      mediaType,
       thumbnailStyle,
       textOverlay,
-      includeEmoji,
+      includeEmoji: includeEmojiBoolean,
       colorScheme,
-      thumbnailCount,
+      thumbnailCount: thumbnailCountNumber,
       createdAt: new Date().toISOString(),
     });
 

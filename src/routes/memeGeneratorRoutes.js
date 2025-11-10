@@ -2,30 +2,41 @@ const express = require("express");
 const router = express.Router();
 const authenticateToken = require("./authMiddleware");
 const { getGeminiModel } = require("../aimodel/gemini");
-const { getFileBuffer } = require("../s3Service");
 const axios = require("axios");
 const memeGeneratorQueueService = require("../services/memeGeneratorQueueService");
+const multer = require("multer");
+
+// Configure multer for in-memory file storage (no disk/S3 upload)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+});
 
 /**
  * POST /api/ai/generate-meme
  * Generate funny meme captions from image using Gemini Vision
  */
-router.post("/generate-meme", authenticateToken, async (req, res) => {
+router.post("/generate-meme", authenticateToken, upload.single("file"), async (req, res) => {
   try {
     const {
-      imageS3Key,
       imageUrl,
       memeStyle = "classic", // classic, sarcastic, wholesome, absurd, relatable
-      captionCount = 3,
+      captionCount = "3",
       modelName = "gemini-2.5-flash",
     } = req.body;
 
     const userId = req.user?.id || req.user?.email || "anonymous";
+    const uploadedFile = req.file; // File from FormData
+
+    // Convert string values to proper types
+    const captionCountNumber = parseInt(captionCount, 10);
 
     // Validate input
-    if (!imageS3Key && !imageUrl) {
+    if (!uploadedFile && !imageUrl) {
       return res.status(400).json({
-        error: "Either imageS3Key or imageUrl is required",
+        error: "Either file upload or imageUrl is required",
       });
     }
 
@@ -38,7 +49,7 @@ router.post("/generate-meme", authenticateToken, async (req, res) => {
     }
 
     // Validate caption count
-    if (captionCount < 1 || captionCount > 5) {
+    if (captionCountNumber < 1 || captionCountNumber > 5) {
       return res.status(400).json({
         error: "captionCount must be between 1 and 5",
       });
@@ -53,20 +64,11 @@ router.post("/generate-meme", authenticateToken, async (req, res) => {
         let imageBuffer;
         let mimeType = "image/jpeg";
 
-        if (imageS3Key) {
-          // Download from S3
-          console.log(`[MemeGenerator] Downloading image from S3: ${imageS3Key}`);
-          imageBuffer = await getFileBuffer(imageS3Key);
-
-          // Determine MIME type from S3 key
-          if (imageS3Key.toLowerCase().endsWith(".png")) {
-            mimeType = "image/png";
-          } else if (
-            imageS3Key.toLowerCase().endsWith(".jpg") ||
-            imageS3Key.toLowerCase().endsWith(".jpeg")
-          ) {
-            mimeType = "image/jpeg";
-          }
+        if (uploadedFile) {
+          // Use uploaded file from memory (no S3 storage)
+          console.log(`[MemeGenerator] Processing uploaded file: ${uploadedFile.originalname}`);
+          imageBuffer = uploadedFile.buffer;
+          mimeType = uploadedFile.mimetype;
         } else if (imageUrl) {
           // Download from URL
           console.log(`[MemeGenerator] Downloading image from URL: ${imageUrl}`);
@@ -81,7 +83,7 @@ router.post("/generate-meme", authenticateToken, async (req, res) => {
         const base64Image = imageBuffer.toString("base64");
 
         // Build prompt based on meme style
-        let systemPrompt = buildMemePrompt(memeStyle, captionCount);
+        let systemPrompt = buildMemePrompt(memeStyle, captionCountNumber);
 
         // Get Gemini model with vision
         console.log(`[MemeGenerator] Using model: ${modelName}`);
@@ -122,10 +124,10 @@ router.post("/generate-meme", authenticateToken, async (req, res) => {
     // Add job to queue with metadata
     const jobId = memeGeneratorQueueService.addJob(processor, {
       userId,
-      imageS3Key,
+      hasUploadedFile: !!uploadedFile,
       imageUrl,
       memeStyle,
-      captionCount,
+      captionCount: captionCountNumber,
       createdAt: new Date().toISOString(),
     });
 
