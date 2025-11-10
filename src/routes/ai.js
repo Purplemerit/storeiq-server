@@ -19,6 +19,12 @@ const {
   getEditImageQueueStats, 
   cancelEditImageJob 
 } = require('../controllers/imageEditController');
+const { 
+  removeBackground, 
+  getBackgroundRemovalStatus, 
+  getBackgroundRemovalQueueStats, 
+  cancelBackgroundRemovalJob 
+} = require('../controllers/backgroundRemoverController');
 const authMiddleware = require('./authMiddleware');
 
 const router = express.Router();
@@ -68,5 +74,11 @@ router.post('/edit-image', authMiddleware, editImage);
 router.get('/edit-image-job-status/:jobId', authMiddleware, getEditImageJobStatus);
 router.get('/edit-image-queue-stats', authMiddleware, getEditImageQueueStats);
 router.delete('/edit-image-job/:jobId', authMiddleware, cancelEditImageJob);
+
+// Background removal with queue
+router.post('/remove-background', authMiddleware, removeBackground);
+router.get('/bg-removal-status/:jobId', authMiddleware, getBackgroundRemovalStatus);
+router.get('/bg-removal-queue-stats', authMiddleware, getBackgroundRemovalQueueStats);
+router.delete('/bg-removal-job/:jobId', authMiddleware, cancelBackgroundRemovalJob);
 
 module.exports = router;
