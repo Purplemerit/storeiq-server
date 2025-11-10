@@ -15,7 +15,7 @@ const crypto = require("crypto");
  */
 router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
   try {
-    const { prompt, quality, voiceSpeed, audioLanguage } = req.body;
+    const { prompt, quality, aspectRatio, durationSeconds, enhancePrompt } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: "Prompt is required" });
@@ -31,32 +31,40 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
     // Generate unique job ID
     const jobId = crypto.randomBytes(16).toString('hex');
 
-    // Map quality to resolution
-    const resolutionMap = {
-      '480P': '360p',
-      '720P': '720p',
-      '1080P': '1080p'
-    };
-    const resolution = resolutionMap[quality] || '720p';
+    // Use quality directly (720p, 1080p format)
+    const resolution = quality || '720p';
+    
+    // Validate and set aspect ratio (default 16:9)
+    const validAspectRatio = ['16:9', '9:16'].includes(aspectRatio) ? aspectRatio : '16:9';
+    
+    // Validate and set duration (default 8)
+    const validDuration = [4, 6, 8].includes(durationSeconds) ? durationSeconds : 8;
+    
+    // Validate enhance prompt (default true)
+    const shouldEnhancePrompt = typeof enhancePrompt === 'boolean' ? enhancePrompt : true;
 
     console.log(`[Veo-3] User ${username} requesting video generation`);
     console.log(`[Veo-3] Job ID: ${jobId}`);
     console.log(`[Veo-3] Prompt: ${prompt.substring(0, 100)}...`);
+    console.log(`[Veo-3] Resolution: ${resolution}, Aspect Ratio: ${validAspectRatio}, Duration: ${validDuration}s`);
+    console.log(`[Veo-3] Enhance Prompt: ${shouldEnhancePrompt}`);
 
     // Define the video generation processor
     const videoProcessor = async (jobData) => {
-      const { prompt, resolution, audioLanguage, userId, username } = jobData;
+      const { prompt, resolution, aspectRatio, durationSeconds, enhancePrompt, userId, username } = jobData;
 
       console.log(`[Veo-3] Starting video generation for job ${jobId}`);
-      console.log(`[Veo-3] Resolution: ${resolution}`);
-      console.log(`[Veo-3] Audio Language: ${audioLanguage || 'English'}`);
+      console.log(`[Veo-3] Resolution: ${resolution}, Aspect Ratio: ${aspectRatio}, Duration: ${durationSeconds}s`);
+      console.log(`[Veo-3] Enhance Prompt: ${enhancePrompt}`);
 
       // Generate video and wait for completion
       const result = await generateVideoAndWait(prompt, {
         resolution: resolution,
+        aspectRatio: aspectRatio,
+        durationSeconds: durationSeconds,
+        enhancePrompt: enhancePrompt,
         sampleCount: 1,
-        modelType: 'standard',
-        audioLanguage: audioLanguage || 'English'
+        modelType: 'standard'
       }, {
         maxAttempts: 60,
         pollInterval: 5000
@@ -147,9 +155,10 @@ router.post("/gemini-veo3/generate-video", verifyJWT, async (req, res) => {
       username,
       prompt,
       resolution,
-      audioLanguage,
-      processor: videoProcessor
-    });
+      aspectRatio: validAspectRatio,
+      durationSeconds: validDuration,
+      enhancePrompt: shouldEnhancePrompt
+    }, videoProcessor);
 
     console.log(`[Veo-3] Job ${jobId} added to queue at position ${queueResult.position}`);
 

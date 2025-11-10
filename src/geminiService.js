@@ -359,10 +359,10 @@ async function generateVideo(prompt, videoConfig = {}) {
     // Sanitize and validate prompt
     let sanitizedPrompt = sanitizePrompt(prompt);
     
-    // Auto-improve prompt if requested
-    if (videoConfig.autoImprovePrompt !== false) {  // Default is true
-      const language = videoConfig.audioLanguage || 'English';
-      const improvedPrompt = improvePromptForVeo(sanitizedPrompt, language);
+    // Auto-improve prompt if requested (using enhancePrompt parameter)
+    const shouldEnhancePrompt = videoConfig.enhancePrompt !== false;  // Default is true
+    if (shouldEnhancePrompt) {
+      const improvedPrompt = improvePromptForVeo(sanitizedPrompt);
       if (improvedPrompt !== sanitizedPrompt) {
         sanitizedPrompt = improvedPrompt;
       }
@@ -386,32 +386,29 @@ async function generateVideo(prompt, videoConfig = {}) {
         }
       ],
       parameters: {
-        // Number of video files to generate (1-2)
+        // Number of video files to generate (1-4)
         sampleCount: videoConfig.sampleCount || 1,
         
-        // Resolution: '720p' or '1080p' (360p is NOT supported by Veo-3)
-        resolution: videoConfig.resolution || '720p'
+        // Resolution: '720p' or '1080p'
+        resolution: videoConfig.resolution || '720p',
+        
+        // Aspect ratio: '16:9' or '9:16'
+        aspectRatio: videoConfig.aspectRatio || '16:9',
+        
+        // Duration in seconds: 4, 6, or 8
+        durationSeconds: videoConfig.durationSeconds || 8,
+        
+        // Enhance prompt with Gemini (default true)
+        enhancePrompt: shouldEnhancePrompt,
+        
+        // Generate audio (default true for Veo 3)
+        generateAudio: videoConfig.generateAudio !== false
       }
     };
     
     // Add storage URI only if provided
     if (outputStorageUri) {
       payload.parameters.storageUri = outputStorageUri;
-    }
-    
-    // Add storage URI if available (required for outputs)
-    if (outputStorageUri) {
-      payload.parameters.storageUri = outputStorageUri;
-    };
-    
-    // Add storage URI only if provided
-    if (outputStorageUri) {
-      payload.parameters.storageUri = outputStorageUri;
-    }
-    
-    // Add optional parameters only if explicitly provided
-    if (videoConfig.generateAudio === true || videoConfig.generateAudio === false) {
-      payload.parameters.generateAudio = videoConfig.generateAudio;
     }
 
     // Make authenticated request to Vertex AI
