@@ -144,47 +144,61 @@ async function editImage(req, res) {
       // Convert image to base64
       const imageBase64 = imageBuffer.toString('base64');
 
-      // Use Imagen 3 model for image editing
-      const imagenModel = "imagen-3.0-capability-001";
+      // Use Imagen 3 model for image editing (updated model)
+      const imagenModel = "imagen-3.0-capability-002";  // Use the more recent capability model
       const location = "us-central1";
       const vertexApiUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${imagenModel}:predict`;
 
       console.log('[Imagen-Edit] Calling Vertex AI API...');
-      const enhancedPrompt = `Transform the image [1]: ${prompt}`;
+      console.log('[Imagen-Edit] Using model:', imagenModel);
       
       const startTime = Date.now();
 
+      // Updated request format for Imagen 3.0 capability model
       const requestBody = {
         instances: [
           {
-            prompt: enhancedPrompt,
-            referenceImages: [
-              {
-                referenceType: "REFERENCE_TYPE_RAW",
-                referenceId: 1,
-                referenceImage: {
-                  bytesBase64Encoded: imageBase64
-                }
-              }
-            ]
+            prompt: prompt,  // Direct prompt without transformation
+            image: {
+              bytesBase64Encoded: imageBase64
+            },
+            editConfig: {
+              editMode: "EDIT_MODE_INPAINT_INSERTION",  // or EDIT_MODE_OUTPAINT or EDIT_MODE_INPAINT_REMOVAL
+              guidanceScale: 100
+            }
           }
         ],
         parameters: {
-          sampleCount: 1
+          sampleCount: 1,
+          aspectRatio: "1:1",  // Maintain original aspect ratio
+          safetyFilterLevel: "BLOCK_SOME",
+          personGeneration: "ALLOW_ADULT"
         }
       };
 
-      const vertexResponse = await axios.post(
-        vertexApiUrl,
-        requestBody,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 60000 // 60 second timeout
-        }
-      );
+      let vertexResponse;
+      try {
+        vertexResponse = await axios.post(
+          vertexApiUrl,
+          requestBody,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 60000 // 60 second timeout
+          }
+        );
+      } catch (apiError) {
+        console.error('[Imagen-Edit] API Error Details:', {
+          status: apiError.response?.status,
+          statusText: apiError.response?.statusText,
+          data: apiError.response?.data,
+          headers: apiError.response?.headers
+        });
+        console.error('[Imagen-Edit] Request that failed:', JSON.stringify(requestBody, null, 2));
+        throw new Error(`Imagen API error: ${apiError.response?.data?.error?.message || apiError.message}`);
+      }
 
       const apiTime = Date.now() - startTime;
       console.log(`[Imagen-Edit] Image edited in ${apiTime}ms`);
