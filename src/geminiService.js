@@ -40,15 +40,30 @@ if (GCP_PROJECT_ID && GCP_LOCATION) {
 
 // Initialize Google Auth for Vertex AI
 let googleAuth = null;
-if (GOOGLE_APPLICATION_CREDENTIALS) {
-  try {
+
+// Try to initialize Google Auth with different methods
+try {
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    // For Render deployment - JSON credentials from environment variable
+    console.log('🔐 Initializing Google Auth with service account JSON from env var');
+    const serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    googleAuth = new GoogleAuth({
+      credentials: serviceAccountKey,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform']
+    });
+  } else if (GOOGLE_APPLICATION_CREDENTIALS) {
+    // For local development - file path to service account JSON
+    console.log('🔐 Initializing Google Auth with service account file:', GOOGLE_APPLICATION_CREDENTIALS);
     googleAuth = new GoogleAuth({
       keyFilename: GOOGLE_APPLICATION_CREDENTIALS,
       scopes: ['https://www.googleapis.com/auth/cloud-platform']
     });
-  } catch (err) {
-    console.warn('Google Auth initialization failed:', err.message);
+  } else {
+    console.warn('⚠️ No Google Cloud authentication configured. Set either GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS');
   }
+} catch (err) {
+  console.error('❌ Google Auth initialization failed:', err.message);
+  console.warn('⚠️ Veo-3 video generation will not be available');
 }
 
 /**
@@ -56,7 +71,7 @@ if (GOOGLE_APPLICATION_CREDENTIALS) {
  */
 async function getAccessToken() {
   if (!googleAuth) {
-    throw new Error('Google Auth not initialized. Set GOOGLE_APPLICATION_CREDENTIALS in .env');
+    throw new Error('Google Auth not initialized. Set either GOOGLE_SERVICE_ACCOUNT_KEY (for deployment) or GOOGLE_APPLICATION_CREDENTIALS (for local dev) in your .env file.');
   }
   try {
     const client = await googleAuth.getClient();
@@ -341,16 +356,16 @@ async function generateVideo(prompt, videoConfig = {}) {
     console.warn('Veo-3 video generation requires GCP_PROJECT_ID and GCP_LOCATION in .env');
     return {
       mock: true,
-      message: 'Veo-3 video generation requires Google Cloud Project configuration. Set GCP_PROJECT_ID, GCP_LOCATION, and GOOGLE_APPLICATION_CREDENTIALS in your .env file.',
+      message: 'Veo-3 video generation requires Google Cloud Project configuration. Set GCP_PROJECT_ID, GCP_LOCATION, and either GOOGLE_SERVICE_ACCOUNT_KEY (for deployment) or GOOGLE_APPLICATION_CREDENTIALS (for local dev) in your .env file.',
       videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4' // Mock video for demo
     };
   }
 
   if (!googleAuth) {
-    console.warn('Veo-3 requires service account authentication. Set GOOGLE_APPLICATION_CREDENTIALS in .env');
+    console.warn('Veo-3 requires service account authentication. Set GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS in .env');
     return {
       mock: true,
-      message: 'Veo-3 requires service account authentication. Set GOOGLE_APPLICATION_CREDENTIALS in your .env file.',
+      message: 'Veo-3 requires service account authentication. Set either GOOGLE_SERVICE_ACCOUNT_KEY (for deployment) or GOOGLE_APPLICATION_CREDENTIALS (for local dev) in your .env file.',
       videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4'
     };
   }
