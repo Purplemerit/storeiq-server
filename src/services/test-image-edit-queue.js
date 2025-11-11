@@ -6,7 +6,7 @@
 const imageEditQueueService = require('./imageEditQueueService');
 const axios = require('axios');
 const s3Service = require('../s3Service');
-const { GoogleAuth } = require('google-auth-library');
+const { getAccessToken } = require('../utils/googleAuth');
 
 console.log('🧪 Testing Image Edit Queue Service (REAL API MODE)\n');
 console.log('⚠️  This will make actual API calls to Google Vertex AI Imagen-3\n');
@@ -74,16 +74,8 @@ const realImageEditProcessor = async (jobData) => {
       throw new Error('Failed to fetch image from S3: ' + err.message);
     }
 
-    // Initialize Google Auth
-    const auth = new GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/cloud-platform']
-    });
-    const client = await auth.getClient();
-    const accessToken = await client.getAccessToken();
-
-    if (!accessToken.token) {
-      throw new Error('Failed to get access token');
-    }
+    // Get access token using shared auth utility
+    const accessToken = await getAccessToken();
 
     // Convert image to base64
     const imageBase64 = imageBuffer.toString('base64');
@@ -123,7 +115,7 @@ const realImageEditProcessor = async (jobData) => {
       requestBody,
       {
         headers: {
-          'Authorization': `Bearer ${accessToken.token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         },
         timeout: 60000 // 60 second timeout

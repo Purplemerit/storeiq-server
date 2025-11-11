@@ -6,7 +6,7 @@
 const imageQueueService = require('./imageQueueService');
 const axios = require('axios');
 const s3Service = require('../s3Service');
-const { GoogleAuth } = require('google-auth-library');
+const { getAccessToken } = require('../utils/googleAuth');
 
 console.log('🧪 Testing Image Queue Service (REAL API MODE)\n');
 console.log('⚠️  This will make actual API calls to Google Vertex AI Imagen-4\n');
@@ -64,16 +64,8 @@ const realImageProcessor = async (jobData) => {
       throw new Error('GCP_PROJECT_ID environment variable not set');
     }
 
-    // Initialize Google Auth
-    const auth = new GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/cloud-platform']
-    });
-    const client = await auth.getClient();
-    const accessToken = await client.getAccessToken();
-
-    if (!accessToken.token) {
-      throw new Error('Failed to get access token');
-    }
+    // Get access token using shared auth utility
+    const accessToken = await getAccessToken();
 
     // Use Imagen 4 Fast model
     const imagenModel = "imagen-4.0-fast-generate-001";
@@ -94,7 +86,7 @@ const realImageProcessor = async (jobData) => {
       },
       {
         headers: {
-          'Authorization': `Bearer ${accessToken.token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         },
       }

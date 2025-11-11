@@ -1,7 +1,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 // Gemini and Veo-3 API integration service
 const axios = require('axios');
-const { GoogleAuth } = require('google-auth-library');
+const { getAccessToken, isGoogleAuthConfigured } = require('./utils/googleAuth');
 const path = require('path');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -38,51 +38,15 @@ if (GCP_PROJECT_ID && GCP_LOCATION) {
   VEO3_API_URL = `https://${GCP_LOCATION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_LOCATION}/publishers/google/models/${VEO_MODEL}:predictLongRunning`;
 }
 
-// Initialize Google Auth for Vertex AI
-let googleAuth = null;
-
-// Try to initialize Google Auth with different methods
-try {
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-    // For Render deployment - JSON credentials from environment variable
-    console.log('🔐 Initializing Google Auth with service account JSON from env var');
-    const serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    googleAuth = new GoogleAuth({
-      credentials: serviceAccountKey,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform']
-    });
-  } else if (GOOGLE_APPLICATION_CREDENTIALS) {
-    // For local development - file path to service account JSON
-    console.log('🔐 Initializing Google Auth with service account file:', GOOGLE_APPLICATION_CREDENTIALS);
-    googleAuth = new GoogleAuth({
-      keyFilename: GOOGLE_APPLICATION_CREDENTIALS,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform']
-    });
-  } else {
-    console.warn('⚠️ No Google Cloud authentication configured. Set either GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS');
-  }
-} catch (err) {
-  console.error('❌ Google Auth initialization failed:', err.message);
-  console.warn('⚠️ Veo-3 video generation will not be available');
-}
+// Initialize Google Auth for Vertex AI (moved to shared utility)
+// Check if authentication is configured
+const googleAuthConfigured = isGoogleAuthConfigured();
 
 /**
- * Get access token for Vertex AI using OAuth 2.0
+ * Get access token for Vertex AI using OAuth 2.0 (now uses shared utility)
  */
-async function getAccessToken() {
-  if (!googleAuth) {
-    throw new Error('Google Auth not initialized. Set either GOOGLE_SERVICE_ACCOUNT_KEY (for deployment) or GOOGLE_APPLICATION_CREDENTIALS (for local dev) in your .env file.');
-  }
-  try {
-    const client = await googleAuth.getClient();
-    const token = await client.getAccessToken();
-    if (!token.token) {
-      throw new Error('Failed to obtain access token');
-    }
-    return token.token;
-  } catch (err) {
-    throw new Error('Failed to get access token: ' + err.message);
-  }
+async function getAccessTokenForVertexAI() {
+  return await getAccessToken();
 }
 
 /**
@@ -361,7 +325,7 @@ async function generateVideo(prompt, videoConfig = {}) {
     };
   }
 
-  if (!googleAuth) {
+  if (!googleAuthConfigured) {
     console.warn('Veo-3 requires service account authentication. Set GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS in .env');
     return {
       mock: true,
@@ -489,7 +453,7 @@ async function generateVideo(prompt, videoConfig = {}) {
  * @returns {Promise<object>} - Operation status and video data when complete
  */
 async function getVideoOperationStatus(operationName) {
-  if (!googleAuth) {
+  if (!googleAuthConfigured) {
     throw new Error('Google Auth not initialized');
   }
 
@@ -727,7 +691,7 @@ async function generateVideoAndWait(prompt, videoConfig = {}, options = {}) {
  * @returns {Promise<Buffer>} - Video data as buffer
  */
 async function downloadVideoFromGCS(gcsUri) {
-  if (!googleAuth) {
+  if (!googleAuthConfigured) {
     throw new Error('Google Auth not initialized');
   }
 

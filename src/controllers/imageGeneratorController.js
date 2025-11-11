@@ -18,7 +18,7 @@
 
 const axios = require('axios');
 const s3Service = require('../s3Service');
-const { GoogleAuth } = require('google-auth-library');
+const { getAccessToken } = require('../utils/googleAuth');
 const imageQueueService = require('../services/imageQueueService');
 const crypto = require('crypto');
 
@@ -123,16 +123,8 @@ async function generateImage(req, res) {
         throw new Error('Google Cloud project not configured');
       }
 
-      // Initialize Google Auth
-      const auth = new GoogleAuth({
-        scopes: ['https://www.googleapis.com/auth/cloud-platform']
-      });
-      const client = await auth.getClient();
-      const accessToken = await client.getAccessToken();
-
-      if (!accessToken.token) {
-        throw new Error('Failed to get access token');
-      }
+      // Get access token using shared auth utility
+      const accessToken = await getAccessToken();
 
       // Use Imagen 4 Fast model for image generation
       const imagenModel = "imagen-4.0-fast-generate-001";
@@ -155,7 +147,7 @@ async function generateImage(req, res) {
         },
         {
           headers: {
-            'Authorization': `Bearer ${accessToken.token}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           },
         }
