@@ -35,7 +35,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://store-iq-client.vercel.app"
+      "https://storeiq-client.vercel.app"
     ],
     credentials: true,
     allowedHeaders: [
