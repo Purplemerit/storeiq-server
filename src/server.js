@@ -102,9 +102,9 @@ app.use("/api/ai", memeGeneratorRoutes);  // Meme Generator API
 app.use("/api/ai", thumbnailGeneratorRoutes);  // Thumbnail Generator API
 app.use("/api/veo", veoRoutes);  // Veo-3 video generation API
 app.use("/api", routes);
-app.use("/auth", googleRoutes);
-app.use("/auth", githubRoutes);
-app.use("/auth", facebookRoutes);
+app.use("/api/auth", googleRoutes);
+app.use("/api/auth", githubRoutes);
+app.use("/api/auth", facebookRoutes);
 app.use("/api/publish", publishRoutes);
 app.use("/video-tts", videoTTSRoutes);
 app.use('/youtube', youtubeRoutes);
