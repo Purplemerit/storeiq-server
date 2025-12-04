@@ -14,6 +14,7 @@ const instagramRoutes = require("../src/instagramconnect/instagram");
 const imageToPromptRoutes = require("./routes/imageToPromptRoutes");  // Image to Prompt routes
 const memeGeneratorRoutes = require("./routes/memeGeneratorRoutes");  // Meme Generator routes
 const thumbnailGeneratorRoutes = require("./routes/thumbnailGeneratorRoutes");  // Thumbnail Generator routes
+const metaWebhookRoutes = require("./routes/metaWebhook");  // Meta Webhook Verification
 
 
 const geminiRoutes = require("../src/aimodel/routes");
@@ -112,6 +113,7 @@ app.use("/api/schedule", scheduleRoutes); // Register schedule routes
 app.use("/api/video", videoMountingRoutes);
 app.use("/api", uploadAudioRoutes);
 app.use("/api", instagramRoutes);
+app.use("/api/webhook/meta", metaWebhookRoutes);  // Meta Webhook for verification
 
 // Add error handling middleware
 app.use((err, req, res, next) => {
